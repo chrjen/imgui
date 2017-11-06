@@ -727,6 +727,7 @@ class FontAtlas {
     fun buildSetupFont(font: Font, fontConfig: FontConfig, ascent: Float, descent: Float) {
         if (!fontConfig.mergeMode) with(font) {
             containerAtlas = this@FontAtlas
+            loaded = true
             configData.add(fontConfig) // TODO replace [0] if not empty?
             configDataCount = 0
             fontSize = fontConfig.sizePixels
@@ -989,7 +990,8 @@ class Font {
 
     fun getCharAdvance(c: Char) = if (c < indexAdvanceX.size) indexAdvanceX[c.i] else fallbackAdvanceX
 
-    val isLoaded get() = ::containerAtlas.isInitialized
+    var loaded = false
+    val isLoaded get() = loaded
 
 
     /*  'maxWidth' stops rendering after a certain width (could be turned into a 2d size). FLT_MAX to disable.

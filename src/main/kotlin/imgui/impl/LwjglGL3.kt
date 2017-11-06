@@ -402,7 +402,7 @@ object LwjglGL3 {
         glDeleteVertexArrays(vaoName)
         glDeleteBuffers(bufferName)
 
-        if (::program.isInitialized) glDeleteProgram(program)
+        glDeleteProgram(program)
 
         if (fontTexture[0] >= 0) {
             glDeleteTextures(fontTexture)

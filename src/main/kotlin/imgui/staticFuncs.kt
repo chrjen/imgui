@@ -247,18 +247,18 @@ fun saveIniSettingsToDisk(iniFilename: String?) {
 
     /*  Write .ini file
         If a window wasn't opened in this session we preserve its settings     */
-    File(Paths.get(iniFilename).toUri()).printWriter().use {
-        for (setting in g.settings) {
-            if (setting.pos.x == Int.MAX_VALUE) continue
-            // Skip to the "###" marker if any. We don't skip past to match the behavior of GetID()
-            val name = setting.name.substringBefore("###")
-            it.println("[$name]")
-            it.println("Pos=${setting.pos.x},${setting.pos.y}")
-            it.println("Size=${setting.size.x.i},${setting.size.y.i}")
-            it.println("Collapsed=${setting.collapsed.i}")
-            it.println()
-        }
+    val it = File(Paths.get(iniFilename).toUri()).printWriter()
+    for (setting in g.settings) {
+        if (setting.pos.x == Int.MAX_VALUE) continue
+        // Skip to the "###" marker if any. We don't skip past to match the behavior of GetID()
+        val name = setting.name.substringBefore("###")
+        it.println("[$name]")
+        it.println("Pos=${setting.pos.x},${setting.pos.y}")
+        it.println("Size=${setting.size.x.i},${setting.size.y.i}")
+        it.println("Collapsed=${setting.collapsed.i}")
+        it.println()
     }
+    it.close()
 }
 
 fun markIniSettingsDirty(window: Window) {
