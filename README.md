@@ -78,6 +78,7 @@ The Immediate Mode GUI paradigm may at first appear unusual to some users. This 
 	    allprojects {
 		    repositories {
 			        ...
+					maven { url "https://dl.bintray.com/kotlin/kotlin-dev" }
 			        maven { url 'https://jitpack.io' }
 		    }
 	    }
