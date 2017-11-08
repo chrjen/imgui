@@ -9,10 +9,13 @@ import glm_.vec4.Vec4
 import imgui.*
 import imgui.Context.overlayDrawList
 import imgui.Context.style
+import imgui.ImGui._begin
 import imgui.ImGui.alignTextToFramePadding
-import imgui.ImGui.begin
 import imgui.ImGui.beginChild
+import imgui.ImGui.beginGroup
+import imgui.ImGui.beginMainMenuBar
 import imgui.ImGui.beginMenu
+import imgui.ImGui.beginMenuBar
 import imgui.ImGui.beginTooltip
 import imgui.ImGui.bullet
 import imgui.ImGui.bulletText
@@ -27,7 +30,10 @@ import imgui.ImGui.dragFloat
 import imgui.ImGui.dummy
 import imgui.ImGui.end
 import imgui.ImGui.endChild
+import imgui.ImGui.endGroup
+import imgui.ImGui.endMainMenuBar
 import imgui.ImGui.endMenu
+import imgui.ImGui.endMenuBar
 import imgui.ImGui.endTooltip
 import imgui.ImGui.fontSize
 import imgui.ImGui.image
@@ -38,6 +44,7 @@ import imgui.ImGui.isItemClicked
 import imgui.ImGui.isItemHovered
 import imgui.ImGui.isMouseDoubleClicked
 import imgui.ImGui.isMouseHoveringRect
+import imgui.ImGui.itemsLineHeightWithSpacing
 import imgui.ImGui.logFinish
 import imgui.ImGui.logToClipboard
 import imgui.ImGui.menuItem
@@ -57,12 +64,14 @@ import imgui.ImGui.pushItemWidth
 import imgui.ImGui.pushStyleColor
 import imgui.ImGui.pushStyleVar
 import imgui.ImGui.pushTextWrapPos
+import imgui.ImGui.radioButton
 import imgui.ImGui.sameLine
 import imgui.ImGui.selectable
 import imgui.ImGui.separator
 import imgui.ImGui.setNextWindowPos
 import imgui.ImGui.setNextWindowSize
 import imgui.ImGui.setNextWindowSizeConstraints
+import imgui.ImGui.setScrollHere
 import imgui.ImGui.setWindowFontScale
 import imgui.ImGui.setWindowSize
 import imgui.ImGui.sliderFloat
@@ -75,7 +84,6 @@ import imgui.ImGui.textColored
 import imgui.ImGui.textDisabled
 import imgui.ImGui.textUnformatted
 import imgui.ImGui.textWrapped
-import imgui.ImGui.time
 import imgui.ImGui.treeNode
 import imgui.ImGui.treeNodeExV
 import imgui.ImGui.treeNodeToLabelSpacing
@@ -101,6 +109,7 @@ import imgui.internal.Rect
 import imgui.internal.Window
 import imgui.or
 import java.util.*
+import kotlin.reflect.KMutableProperty0
 import imgui.ColorEditFlags as Cef
 import imgui.Context as g
 import imgui.InputTextFlags as Itf
@@ -126,29 +135,33 @@ import imgui.WindowFlags as Wf
  *  -Your beloved friend, imgui_demo.cpp (that you won't delete)
  */
 interface imgui_demoDebugInfo {
-
     /** Create demo/test window.
      *  Demonstrate most ImGui features (big function!)
      *  Call this to learn about the library! try to make it always available in your application!   */
-    fun showTestWindow(pOpen: BooleanArray) {
+    fun showTestWindow(open: BooleanArray) {
+        showTestWindow(::showWindow)
+        open[0] = showWindow
+    }
 
-        if (showApp.mainMenuBar[0]) showExampleAppMainMenuBar()
-        if (showApp.console[0]) showExampleAppConsole(showApp.console)
-        if (showApp.log[0]) showExampleAppLog(showApp.log)
-        if (showApp.layout[0]) showExampleAppLayout(showApp.layout)
-        if (showApp.propertyEditor[0]) showExampleAppPropertyEditor(showApp.propertyEditor)
-        if (showApp.longText[0]) showExampleAppLongText(showApp.longText)
-        if (showApp.autoResize[0]) showExampleAppAutoResize(showApp.autoResize)
-        if (showApp.constrainedResize[0]) showExampleAppConstrainedResize(showApp.constrainedResize)
-        if (showApp.fixedOverlay[0]) showExampleAppFixedOverlay(showApp.fixedOverlay)
-        if (showApp.manipulatingWindowTitle[0]) showExampleAppManipulatingWindowTitle(showApp.manipulatingWindowTitle)
-        if (showApp.customRendering[0]) showExampleAppCustomRendering(showApp.customRendering)
-        if (showApp.metrics[0]) ImGui.showMetricsWindow(showApp.metrics)
-        if (showApp.styleEditor[0])
-            window("Style Editor", pOpen = showApp.styleEditor) { showStyleEditor() }
+    fun showTestWindow(open: KMutableProperty0<Boolean>) {
 
-        if (showApp.about[0])
-            withWindow("About ImGui", showApp.about, Wf.AlwaysAutoResize.i) {
+        if (showApp.mainMenuBar) showExampleAppMainMenuBar()
+        if (showApp.console) showExampleAppConsole(showApp::console)
+        if (showApp.log) showExampleAppLog(showApp::log)
+        if (showApp.layout) showExampleAppLayout(showApp::layout)
+        if (showApp.propertyEditor) showExampleAppPropertyEditor(showApp::propertyEditor)
+        if (showApp.longText) showExampleAppLongText(showApp::longText)
+        if (showApp.autoResize) showExampleAppAutoResize(showApp::autoResize)
+        if (showApp.constrainedResize) showExampleAppConstrainedResize(showApp::constrainedResize)
+        if (showApp.fixedOverlay) showExampleAppFixedOverlay(showApp::fixedOverlay)
+        if (showApp.manipulatingWindowTitle) showExampleAppManipulatingWindowTitle(showApp::manipulatingWindowTitle)
+        if (showApp.customRendering) showExampleAppCustomRendering(showApp::customRendering)
+        if (showApp.metrics) ImGui.showMetricsWindow(showApp::metrics)
+        if (showApp.styleEditor)
+            window("Style Editor", showApp::styleEditor) { showStyleEditor() }
+
+        if (showApp.about)
+            withWindow("About ImGui", showApp::about, Wf.AlwaysAutoResize.i) {
                 text("JVM ImGui, $version")
                 separator()
                 text("Original by Omar Cornut, ported by Giuseppe Barbieri and all github contributors.")
@@ -157,15 +170,15 @@ interface imgui_demoDebugInfo {
 
         // Demonstrate the various window flags. Typically you would just use the default.
         var windowFlags = 0
-        if (noTitlebar[0]) windowFlags = windowFlags or Wf.NoTitleBar
-        if (!noBorder[0]) windowFlags = windowFlags or Wf.ShowBorders
-        if (noResize[0]) windowFlags = windowFlags or Wf.NoResize
-        if (noMove[0]) windowFlags = windowFlags or Wf.NoMove
-        if (noScrollbar[0]) windowFlags = windowFlags or Wf.NoScrollbar
-        if (noCollapse[0]) windowFlags = windowFlags or Wf.NoCollapse
-        if (!noMenu[0]) windowFlags = windowFlags or Wf.MenuBar
+        if (noTitlebar) windowFlags = windowFlags or Wf.NoTitleBar
+        if (!noBorder) windowFlags = windowFlags or Wf.ShowBorders
+        if (noResize) windowFlags = windowFlags or Wf.NoResize
+        if (noMove) windowFlags = windowFlags or Wf.NoMove
+        if (noScrollbar) windowFlags = windowFlags or Wf.NoScrollbar
+        if (noCollapse) windowFlags = windowFlags or Wf.NoCollapse
+        if (!noMenu) windowFlags = windowFlags or Wf.MenuBar
         setNextWindowSize(Vec2(550, 680), Cond.FirstUseEver)
-        if (!begin("ImGui Demo", pOpen, windowFlags)) {
+        if (!_begin("ImGui Demo", open, windowFlags)) {
             end()   // Early out if the window is collapsed, as an optimization.
             return
         }
@@ -183,21 +196,21 @@ interface imgui_demoDebugInfo {
             }
             menu("Examples") {
                 menuItem("Main menu bar", "", showApp.mainMenuBar)
-                menuItem("Console", "", showApp.console)
-                menuItem("Log", "", showApp.log)
-                menuItem("Simple layout", "", showApp.layout)
-                menuItem("Property editor", "", showApp.propertyEditor)
-                menuItem("Long text display", "", showApp.longText)
-                menuItem("Auto-resizing window", "", showApp.autoResize)
-                menuItem("Constrained-resizing window", "", showApp.constrainedResize)
-                menuItem("Simple overlay", "", showApp.fixedOverlay)
-                menuItem("Manipulating window title", "", showApp.manipulatingWindowTitle)
-                menuItem("Custom rendering", "", showApp.customRendering)
+                menuItem("Console", "", showApp::console)
+                menuItem("Log", "", showApp::log)
+                menuItem("Simple layout", "", showApp::layout)
+                menuItem("Property editor", "", showApp::propertyEditor)
+                menuItem("Long text display", "", showApp::longText)
+                menuItem("Auto-resizing window", "", showApp::autoResize)
+                menuItem("Constrained-resizing window", "", showApp::constrainedResize)
+                menuItem("Simple overlay", "", showApp::fixedOverlay)
+                menuItem("Manipulating window title", "", showApp::manipulatingWindowTitle)
+                menuItem("Custom rendering", "", showApp::customRendering)
             }
             menu("Help") {
-                menuItem("Metrics", "", showApp.metrics)
-                menuItem("Style Editor", "", showApp.styleEditor)
-                menuItem("About ImGui", "", showApp.about)
+                menuItem("Metrics", "", showApp::metrics)
+                menuItem("Style Editor", "", showApp::styleEditor)
+                menuItem("About ImGui", "", showApp::about)
             }
         }
 
@@ -210,13 +223,13 @@ interface imgui_demoDebugInfo {
 
         collapsingHeader("Window options") {
 
-            checkbox("No titlebar", noTitlebar); sameLine(150f)
-            checkbox("No border", noBorder); sameLine(300f)
-            checkbox("No resize", noResize)
-            checkbox("No move", noMove); sameLine(150f)
-            checkbox("No scrollbar", noScrollbar); sameLine(300f)
-            checkbox("No collapse", noCollapse)
-            checkbox("No menu", noMenu)
+            checkbox("No titlebar", ::noTitlebar); sameLine(150f)
+            checkbox("No border", ::noBorder); sameLine(300f)
+            checkbox("No resize", ::noResize)
+            checkbox("No move", ::noMove); sameLine(150f)
+            checkbox("No scrollbar", ::noScrollbar); sameLine(300f)
+            checkbox("No collapse", ::noCollapse)
+            checkbox("No menu", ::noMenu)
 
             treeNode("Style") { showStyleEditor() }
 
@@ -1346,7 +1359,7 @@ interface imgui_demoDebugInfo {
                     //static int dummy_i = 0;
                     //ImGui::Combo("Combo", &dummy_i, "Delete\0Delete harder\0");
 
-                    withStyleVar(StyleVar.FramePadding, Vec2()) { checkbox("Don't ask me next time", dontAskMeNextTime) }
+                    withStyleVar(StyleVar.FramePadding, Vec2()) { checkbox("Don't ask me next time", ::dontAskMeNextTime) }
 
                     button("OK", Vec2(120, 0)) { closeCurrentPopup() }
                     sameLine()
@@ -1726,14 +1739,14 @@ interface imgui_demoDebugInfo {
 
     /** create metrics window. display ImGui internals: browse window list, draw commands, individual vertices, basic
      *  internal state, etc.    */
-    fun showMetricsWindow(pOpen: BooleanArray) = with(ImGui) {
+    fun showMetricsWindow(open: KMutableProperty0<Boolean>) {
 
-        if (begin("ImGui Metrics", pOpen)) {
+        if (_begin("ImGui Metrics", open)) {
             text("ImGui $version")
             text("Application average %.3f ms/frame (%.1f FPS)", 1000f / IO.framerate, IO.framerate)
             text("%d vertices, %d indices (%d triangles)", IO.metricsRenderVertices, IO.metricsRenderIndices, IO.metricsRenderIndices / 3)
             text("%d allocations", IO.metricsAllocs)
-            checkbox("Show clipping rectangles when hovering an ImDrawCmd", showClipRects)
+            checkbox("Show clipping rectangles when hovering an ImDrawCmd", ::showClipRects)
             separator()
 
             Funcs.nodeWindows(g.windows, "Windows")
@@ -1798,7 +1811,7 @@ interface imgui_demoDebugInfo {
                 val mode = if (drawList.idxBuffer.isNotEmpty()) "indexed" else "non-indexed"
                 val cmdNodeOpen = treeNode(i, "Draw %-4d $mode vtx, tex = ${cmd.textureId}, clip_rect = (%.0f,%.0f)..(%.0f,%.0f)",
                         cmd.elemCount, cmd.clipRect.x, cmd.clipRect.y, cmd.clipRect.z, cmd.clipRect.w)
-                if (showClipRects[0] && isItemHovered()) {
+                if (showClipRects && isItemHovered()) {
                     val clipRect = Rect(cmd.clipRect)
                     val vtxsRect = Rect()
                     for (e in elemOffset until elemOffset + cmd.elemCount)
@@ -1850,8 +1863,8 @@ interface imgui_demoDebugInfo {
             if (!treeNode(window, "$label '${window.name}', $active @ 0x%X", System.identityHashCode(window)))
                 return
             nodeDrawList(window.drawList, "DrawList")
-            bulletText("Pos: (%.1f,%.1f), Size: (%.1f,%.1f), SizeContents (%.1f,%.1f)", window.pos.x, window.pos.y, window.size.x,
-                    window.size.y, window.sizeContents.x, window.sizeContents.y)
+            bulletText("Pos: (%.1f,%.1f), Size: (%.1f,%.1f), SizeContents (%.1f,%.1f)", window.pos.x.f, window.pos.y.f,
+                    window.size.x, window.size.y, window.sizeContents.x, window.sizeContents.y)
             if (isItemHovered())
                 overlayDrawList.addRect(Vec2(window.pos), Vec2(window.pos + window.size), COL32(255, 255, 0, 255))
             bulletText("Scroll: (%.2f,%.2f)", window.scroll.x, window.scroll.y)
@@ -1923,8 +1936,7 @@ interface imgui_demoDebugInfo {
         pushItemWidth(windowWidth * 0.55f)
 
         treeNode("Rendering") {
-            checkbox("Anti-aliased lines", bool.apply { this[0] = style.antiAliasedLines })
-            //TODO ImGui::SameLine(); ShowHelpMarker("When disabling anti-aliasing lines, you'll probably want to disable borders in your style as well.");
+            checkbox("Anti-aliased lines", bool.apply { set(0, style.antiAliasedLines) })
             style.antiAliasedLines = bool[0]
             checkbox("Anti-aliased shapes", bool.apply { this[0] = style.antiAliasedShapes })
             style.antiAliasedShapes = bool[0]
@@ -1992,11 +2004,9 @@ interface imgui_demoDebugInfo {
 
             text("Tip: Left-click on colored square to open color picker,\nRight-click to open edit options menu.")
 
-//            static ImGuiColorEditFlags alpha_flags = 0; TODO (also 10 loc below)
-//            ImGui::RadioButton("Opaque", &alpha_flags, 0); ImGui::SameLine();
-//            ImGui::RadioButton("Alpha", &alpha_flags, ImGuiColorEditFlags_AlphaPreview); ImGui::SameLine();
-//
-//            radioButton("Both", alphaFlags, ColorEditFlags.AlphaPreviewHalf)
+            radioButton("Opaque", ::alphaFlags, 0); sameLine()
+            radioButton("Alpha", ::alphaFlags, Cef.AlphaPreview.i); sameLine()
+            radioButton("Both", ::alphaFlags, Cef.AlphaPreviewHalf.i)
 
             beginChild("#colors", Vec2(0, 300), true, Wf.AlwaysVerticalScrollbar.i)
             pushItemWidth(-160f)
@@ -2005,7 +2015,7 @@ interface imgui_demoDebugInfo {
                 if (!filter.passFilter(name)) // TODO fix bug
                     continue
                 withId(i) {
-                    colorEditVec4(name, style.colors[i], Cef.AlphaBar.i) // | alpha_flags); TODO
+                    colorEditVec4(name, style.colors[i], Cef.AlphaBar or alphaFlags)
                     if (style.colors[i] != (ref?.colors?.get(i) ?: defaultStyle.colors[i])) {
                         sameLine()
                         button("Revert") { style.colors[i] put (ref?.colors?.get(i) ?: defaultStyle.colors[i]) }
@@ -2132,6 +2142,9 @@ interface imgui_demoDebugInfo {
 
     companion object {
 
+        var showWindow = false
+        var alphaFlags = 0
+
         fun showHelpMarker(desc: String) {
             textDisabled("(?)")
             if (isItemHovered()) {
@@ -2144,7 +2157,7 @@ interface imgui_demoDebugInfo {
         }
 
         /** Demonstrate creating a fullscreen menu bar and populating it.   */
-        fun showExampleAppMainMenuBar() = with(ImGui) {
+        fun showExampleAppMainMenuBar() {
 
             if (beginMainMenuBar()) {
                 if (beginMenu("File")) {
@@ -2241,9 +2254,9 @@ interface imgui_demoDebugInfo {
         val bool = BooleanArray(1)
 
         /** Demonstrate creating a window which gets auto-resized according to its content. */
-        fun showExampleAppAutoResize(pOpen: BooleanArray) {
+        fun showExampleAppAutoResize(open: KMutableProperty0<Boolean>) {
 
-            if (!begin("Example: Auto-resizing window", pOpen, Wf.AlwaysAutoResize.i)) {
+            if (!_begin("Example: Auto-resizing window", open, Wf.AlwaysAutoResize.i)) {
                 end()
                 return
             }
@@ -2259,7 +2272,7 @@ interface imgui_demoDebugInfo {
         val lines = intArrayOf(10)
 
         /** Demonstrate creating a window with custom resize constraints.   */
-        fun showExampleAppConstrainedResize(pOpen: BooleanArray) {
+        fun showExampleAppConstrainedResize(open: KMutableProperty0<Boolean>) {
 
             when (type[0]) {
                 0 -> setNextWindowSizeConstraints(Vec2(-1, 0), Vec2(-1, Float.MAX_VALUE))      // Vertical only
@@ -2270,7 +2283,7 @@ interface imgui_demoDebugInfo {
                 5 -> setNextWindowSizeConstraints(Vec2(), Vec2(Float.MAX_VALUE), CustomConstraints.step, 100)// Fixed Step
             }
 
-            window("Example: Constrained Resize", pOpen) {
+            window("Example: Constrained Resize", open) {
                 val desc = listOf("Resize vertical only", "Resize horizontal only", "Width > 100, Height > 100",
                         "Width 300-400", "Custom: Always Square", "Custom: Fixed Steps (100)")
                 combo("Constraint", type, desc)
@@ -2298,7 +2311,7 @@ interface imgui_demoDebugInfo {
 
         /** Demonstrate creating a simple static window with no decoration + a context-menu to choose which corner
          *  of the screen to use */
-        fun showExampleAppFixedOverlay(pOpen: BooleanArray) {
+        fun showExampleAppFixedOverlay(open: KMutableProperty0<Boolean>) {
 
             val DISTANCE = 10f
             val windowPos = Vec2(if (corner has 1) IO.displaySize.x - DISTANCE else DISTANCE,
@@ -2306,7 +2319,7 @@ interface imgui_demoDebugInfo {
             val windowPosPivot = Vec2(if (corner has 1) 1f else 0f, if (corner has 2) 1f else 0f)
             setNextWindowPos(windowPos, Cond.Always, windowPosPivot)
             pushStyleColor(Col.WindowBg, Vec4(0f, 0f, 0f, 0.3f))  // Transparent background
-            if (begin("Example: Fixed Overlay", pOpen, Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings)) {
+            if (_begin("Example: Fixed Overlay", open, Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings)) {
                 text("Simple overlay\nin the corner of the screen.\n(right-click to change position)")
                 separator()
                 text("Mouse Position: (%.1f,%.1f)".format(IO.mousePos.x, IO.mousePos.y))
@@ -2327,7 +2340,7 @@ interface imgui_demoDebugInfo {
         /** Demonstrate using "##" and "###" in identifiers to manipulate ID generation.
          *  Read section "How can I have multiple widgets with the same label? Can I have widget without a label? (Yes).
          *  A primer on the purpose of labels/IDs." about ID.   */
-        fun showExampleAppManipulatingWindowTitle(p: BooleanArray) {
+        fun showExampleAppManipulatingWindowTitle(open: KMutableProperty0<Boolean>) {
 
             /*  By default, Windows are uniquely identified by their title.
                 You can use the "##" and "###" markers to manipulate the display/ID.
@@ -2351,10 +2364,10 @@ interface imgui_demoDebugInfo {
         }
 
         /** Demonstrate using the low-level ImDrawList to draw custom shapes.   */
-        fun showExampleAppCustomRendering(pOpen: BooleanArray) {
+        fun showExampleAppCustomRendering(open: KMutableProperty0<Boolean>) {
 
             setNextWindowSize(Vec2(350, 560), Cond.FirstUseEver)
-            if (!begin("Example: Custom rendering", pOpen)) {
+            if (!_begin("Example: Custom rendering", open)) {
                 end()
                 return
             }
@@ -2454,22 +2467,22 @@ interface imgui_demoDebugInfo {
             end()
         }
 
-        fun showExampleAppConsole(pOpen: BooleanArray) = console.draw("Example: Console", pOpen)
+        fun showExampleAppConsole(open: KMutableProperty0<Boolean>) = console.draw("Example: Console", open)
 
         val console = ExampleAppConsole()
 
         /** Demonstrate creating a simple log window with basic filtering.  */
-        fun showExampleAppLog(pOpen: BooleanArray) {
+        fun showExampleAppLog(open: KMutableProperty0<Boolean>) {
 
             // Demo: add random items (unless Ctrl is held)
             val time = ImGui.time
-            if (time - lastTime >= 0.20f && !IO.keyCtrl) {
+            if (time - lastTime >= 0.2f && !IO.keyCtrl) {
                 val s = randomWords[rand % randomWords.size]
                 val t = "%.1f".format(style.locale, time)
                 log.addLog("[$s] Hello, time is $t, rand() $rand\n")
                 lastTime = time
             }
-            log.draw("Example: Log (Filter not yet implemented)", pOpen)
+            log.draw("Example: Log (Filter not yet implemented)", open)
         }
 
         val log = ExampleAppLog()
@@ -2479,13 +2492,13 @@ interface imgui_demoDebugInfo {
         val rand get() = glm.abs(random.nextInt() / 100_000)
 
         /** Demonstrate create a window with multiple child windows.    */
-        fun showExampleAppLayout(pOpen: BooleanArray) = with(ImGui) {
+        fun showExampleAppLayout(open: KMutableProperty0<Boolean>) {
 
             setNextWindowSize(Vec2(500, 440), Cond.FirstUseEver)
-            if (begin("Example: Layout", pOpen, Wf.MenuBar.i)) {
+            if (_begin("Example: Layout", open, Wf.MenuBar.i)) {
                 if (beginMenuBar()) {
                     if (beginMenu("File")) {
-                        if (menuItem("Close")) pOpen[0] = false
+                        if (menuItem("Close")) open.set(false)
                         endMenu()
                     }
                     endMenuBar()
@@ -2521,10 +2534,10 @@ interface imgui_demoDebugInfo {
         var selectedChild = 0
 
         /** Demonstrate create a simple property editor.    */
-        fun showExampleAppPropertyEditor(pOpen: BooleanArray) {
+        fun showExampleAppPropertyEditor(open: KMutableProperty0<Boolean>) {
 
             setNextWindowSize(Vec2(430, 450), Cond.FirstUseEver)
-            if (!begin("Example: Property editor", pOpen)) {
+            if (!_begin("Example: Property editor", open)) {
                 end()
                 return
             }
@@ -2550,10 +2563,10 @@ interface imgui_demoDebugInfo {
         }
 
         /** Demonstrate/test rendering huge amount of text, and the incidence of clipping.  */
-        fun showExampleAppLongText(pOpen: BooleanArray) {
+        fun showExampleAppLongText(open: KMutableProperty0<Boolean>) {
 
             setNextWindowSize(Vec2(520, 600), Cond.FirstUseEver)
-            if (!begin("Example: Long text display, TODO", pOpen)) {
+            if (!_begin("Example: Long text display, TODO", open)) {
                 end()
                 return
             }
@@ -2604,37 +2617,37 @@ interface imgui_demoDebugInfo {
 
         object showApp {
             // Examples apps
-            var mainMenuBar = booleanArrayOf(false)
-            var console = booleanArrayOf(false)
-            var log = booleanArrayOf(false)
-            var layout = booleanArrayOf(false)
-            var propertyEditor = booleanArrayOf(false)
-            var longText = booleanArrayOf(false)
-            var autoResize = booleanArrayOf(false)
-            var constrainedResize = booleanArrayOf(false)
-            var fixedOverlay = booleanArrayOf(false)
-            var manipulatingWindowTitle = booleanArrayOf(false)
-            var customRendering = booleanArrayOf(false)
-            var styleEditor = booleanArrayOf(false)
+            var mainMenuBar = false
+            var console = false
+            var log = false
+            var layout = false
+            var propertyEditor = false
+            var longText = false
+            var autoResize = false
+            var constrainedResize = false
+            var fixedOverlay = false
+            var manipulatingWindowTitle = false
+            var customRendering = false
+            var styleEditor = false
 
-            var metrics = booleanArrayOf(false)
-            var about = booleanArrayOf(false)
+            var metrics = false
+            var about = false
         }
 
-        var noTitlebar = booleanArrayOf(false)
-        var noBorder = booleanArrayOf(true)
-        var noResize = booleanArrayOf(false)
-        var noMove = booleanArrayOf(false)
-        var noScrollbar = booleanArrayOf(false)
-        var noCollapse = booleanArrayOf(false)
-        var noMenu = booleanArrayOf(false)
+        var noTitlebar = false
+        var noBorder = true
+        var noResize = false
+        var noMove = false
+        var noScrollbar = false
+        var noCollapse = false
+        var noMenu = false
 
 
-        val showClipRects = booleanArrayOf(true)
+        var showClipRects = true
 
         val listboxItemCurrent = intArrayOf(1)
 
-        val dontAskMeNextTime = booleanArrayOf(false)
+        var dontAskMeNextTime = false
 
         val outputDest = intArrayOf(0)
         val outputOnlyModified = booleanArrayOf(false)
@@ -2734,10 +2747,10 @@ interface imgui_demoDebugInfo {
 //            ScrollToBottom = true;
 //        }
 //
-        fun draw(title: String, pOpen: BooleanArray) = with(ImGui) {
+        fun draw(title: String, open: KMutableProperty0<Boolean>) {
 
             setNextWindowSize(Vec2(520, 600), Cond.FirstUseEver)
-            if (!begin(title, pOpen)) {
+            if (!_begin(title, open)) {
                 end()
                 return
             }
@@ -2984,10 +2997,10 @@ interface imgui_demoDebugInfo {
 
         fun clear() = buf.setLength(0)
 
-        fun draw(title: String, pOpen: BooleanArray? = null) = with(ImGui) {
+        fun draw(title: String, open: KMutableProperty0<Boolean>? = null) {
 
             setNextWindowSize(Vec2(500, 400), Cond.FirstUseEver)
-            begin(title, pOpen)
+            _begin(title, open)
             if (button("Clear")) clear()
             sameLine()
             val copy = button("Copy")
@@ -3012,8 +3025,7 @@ interface imgui_demoDebugInfo {
 //            else
             textUnformatted(buf.toString())
 
-            if (scrollToBottom)
-                setScrollHere(1f)
+            if (scrollToBottom) setScrollHere(1f)
             scrollToBottom = false
             endChild()
             end()
