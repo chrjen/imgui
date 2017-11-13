@@ -80,9 +80,6 @@ interface imgui_window {
             createNewWindow(name, sizeOnFirstUse, flags)
         }
 
-        if (name.length >= 8 && name[7] == '1')
-            println()
-
         val currentFrame = g.frameCount
         val firstBeginOfTheFrame = window.lastFrameActive != currentFrame
         if (firstBeginOfTheFrame)
@@ -326,17 +323,16 @@ interface imgui_window {
             }
 
             // Clamp position so it stays visible
-            if (flags hasnt Wf.ChildWindow && flags hasnt Wf.Tooltip) {
-                /*  Ignore zero-sized display explicitly to avoid losing positions if a window manager reports zero-sized
-                window when initializing or minimizing. */
+            if (flags hasnt Wf.ChildWindow && flags hasnt Wf.Tooltip)
+            /*  Ignore zero-sized display explicitly to avoid losing positions if a window manager reports zero-sized
+            window when initializing or minimizing. */
                 if (!windowPosSetByApi && window.autoFitFrames.x <= 0 && window.autoFitFrames.y <= 0 && IO.displaySize greaterThan 0) {
                     val padding = glm.max(style.displayWindowPadding, style.displaySafeAreaPadding)
                     window.posF put (glm.max(window.posF + window.size, padding) - window.size)
                     window.posF.x = glm.min(window.posF.x, (IO.displaySize.x - padding.x).f)
                     window.posF.y = glm.min(window.posF.y, (IO.displaySize.y - padding.y).f)
                 }
-            }
-            window.pos put window.posF
+            window.pos.put(window.posF.x.i.f, window.posF.y.i.f)
 
             // Default item width. Make it proportional to window size if window manually resizes
             window.itemWidthDefault =
@@ -376,8 +372,7 @@ interface imgui_window {
             else {
                 var resizeCol = Col.Text
                 val resizeCornerSize = glm.max(g.fontSize * 1.35f, windowRounding + 1f + g.fontSize * 0.2f)
-                if (flags hasnt Wf.AlwaysAutoResize && window.autoFitFrames.x <= 0 && window.autoFitFrames.y <= 0 &&
-                        flags hasnt Wf.NoResize) {
+                if (flags hasnt Wf.AlwaysAutoResize && window.autoFitFrames lessThanEqual 0 && flags hasnt Wf.NoResize) {
                     // Manual resize
                     // Using the FlattenChilds button flag, we make the resize button accessible even if we are hovering over a child window
                     val br = window.rect().br
@@ -731,7 +726,7 @@ interface imgui_window {
     }
 
     /** set next window position. call before Begin()   */
-    fun setNextWindowPos(pos: Vec2, cond: Cond = Cond.Null, pivot: Vec2 = Vec2()) {
+    fun setNextWindowPos(pos: Vec2, cond: Cond = Cond.Always, pivot: Vec2 = Vec2()) {
         g.setNextWindowPosVal put pos
         g.setNextWindowPosPivot = pivot
         g.setNextWindowPosCond = cond

@@ -2,17 +2,21 @@ package imgui
 
 import glm_.vec2.Vec2
 import imgui.ImGui._begin
-import imgui.ImGui.begin
+import imgui.ImGui.beginChild
+import imgui.ImGui.beginMainMenuBar
 import imgui.ImGui.beginMenu
 import imgui.ImGui.beginMenuBar
 import imgui.ImGui.beginPopupModal
 import imgui.ImGui.beginTooltip
 import imgui.ImGui.collapsingHeader
 import imgui.ImGui.end
+import imgui.ImGui.endChild
+import imgui.ImGui.endMainMenuBar
 import imgui.ImGui.endMenu
 import imgui.ImGui.endMenuBar
 import imgui.ImGui.endPopup
 import imgui.ImGui.endTooltip
+import imgui.ImGui.menuItem
 import imgui.ImGui.popId
 import imgui.ImGui.popItemWidth
 import imgui.ImGui.popStyleVar
@@ -28,17 +32,16 @@ import kotlin.reflect.KMutableProperty0
 object functionalProgramming {
 
     inline fun button(label: String, sizeArg: Vec2 = Vec2(), block: () -> Unit) {
-        if (ImGui.buttonEx(label, sizeArg, 0))
-            block()
+        if (ImGui.buttonEx(label, sizeArg, 0)) block()
     }
 
     inline fun smallButton(label: String, block: () -> Unit) {
-        if (ImGui.smallButton(label))
-            block()
+        if (ImGui.smallButton(label)) block()
     }
 
-    inline fun withWindow(name: String, open: KMutableProperty0<Boolean>?, flags: Int = 0, block: (Boolean) -> Unit) {
-        block(_begin(name, open, flags))
+    inline fun withWindow(name: String, open: KMutableProperty0<Boolean>?, flags: Int = 0, block: () -> Unit) {
+        _begin(name, open, flags)
+        block()
         end()
     }
 
@@ -56,6 +59,13 @@ object functionalProgramming {
         }
     }
 
+    inline fun mainMenuBar(block: () -> Unit) {
+        if (beginMainMenuBar()) {
+            block()
+            endMainMenuBar()
+        }
+    }
+
     inline fun menu(label: String, enabled: Boolean = true, block: () -> Unit) {
         if (beginMenu(label, enabled)) {
             block()
@@ -63,13 +73,17 @@ object functionalProgramming {
         }
     }
 
+    inline fun menuItem(label: String, shortcut: String = "", selected: Boolean = false, enabled: Boolean = true, block: () -> Unit) {
+        if (menuItem(label, shortcut, selected, enabled)) block()
+    }
+
     inline fun collapsingHeader(label: String, flags: Int = 0, block: () -> Unit) {
         if (collapsingHeader(label, flags))
             block()
     }
 
-    inline fun collapsingHeader(label: String, pOpen: BooleanArray?, flags: Int = 0, block: () -> Unit) {
-        if (collapsingHeader(label, pOpen, flags))
+    inline fun collapsingHeader(label: String, open: KMutableProperty0<Boolean>, flags: Int = 0, block: () -> Unit) {
+        if (collapsingHeader(label, open, flags))
             block()
     }
 
@@ -78,6 +92,12 @@ object functionalProgramming {
             block()
             treePop()
         }
+    }
+
+    inline fun withChild(strId: String, size: Vec2 = Vec2(), border: Boolean = false, extraFlags: Int = 0, block: () -> Unit) {
+        beginChild(strId, size, border, extraFlags)
+        block()
+        endChild()
     }
 
     inline fun treeNode(strId: String, fmt: String, block: () -> Unit) {
