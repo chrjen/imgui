@@ -26,6 +26,7 @@ import imgui.ImGui.columns
 import imgui.ImGui.combo
 import imgui.ImGui.cursorScreenPos
 import imgui.ImGui.dragFloat
+import imgui.ImGui.dragInt
 import imgui.ImGui.dummy
 import imgui.ImGui.end
 import imgui.ImGui.endChild
@@ -38,11 +39,16 @@ import imgui.ImGui.image
 import imgui.ImGui.imageButton
 import imgui.ImGui.indent
 import imgui.ImGui.inputFloat
+import imgui.ImGui.inputFloat3
+import imgui.ImGui.inputInt
+import imgui.ImGui.inputText
 import imgui.ImGui.isItemClicked
 import imgui.ImGui.isItemHovered
 import imgui.ImGui.isMouseDoubleClicked
 import imgui.ImGui.isMouseHoveringRect
 import imgui.ImGui.itemsLineHeightWithSpacing
+import imgui.ImGui.labelText
+import imgui.ImGui.logButtons
 import imgui.ImGui.logFinish
 import imgui.ImGui.logToClipboard
 import imgui.ImGui.menuItem
@@ -50,6 +56,7 @@ import imgui.ImGui.mousePos
 import imgui.ImGui.newLine
 import imgui.ImGui.nextColumn
 import imgui.ImGui.openPopup
+import imgui.ImGui.plotLines
 import imgui.ImGui.popFont
 import imgui.ImGui.popId
 import imgui.ImGui.popItemWidth
@@ -70,8 +77,10 @@ import imgui.ImGui.setNextWindowPos
 import imgui.ImGui.setNextWindowSize
 import imgui.ImGui.setNextWindowSizeConstraints
 import imgui.ImGui.setScrollHere
+import imgui.ImGui.setTooltip
 import imgui.ImGui.setWindowFontScale
 import imgui.ImGui.setWindowSize
+import imgui.ImGui.sliderAngle
 import imgui.ImGui.sliderFloat
 import imgui.ImGui.sliderFloatVec2
 import imgui.ImGui.sliderInt
@@ -82,6 +91,7 @@ import imgui.ImGui.textColored
 import imgui.ImGui.textDisabled
 import imgui.ImGui.textUnformatted
 import imgui.ImGui.textWrapped
+import imgui.ImGui.time
 import imgui.ImGui.treeNode
 import imgui.ImGui.treeNodeExV
 import imgui.ImGui.treeNodeToLabelSpacing
@@ -95,15 +105,17 @@ import imgui.functionalProgramming.collapsingHeader
 import imgui.functionalProgramming.mainMenuBar
 import imgui.functionalProgramming.menu
 import imgui.functionalProgramming.menuBar
+import imgui.functionalProgramming.menuItem
+import imgui.functionalProgramming.popupContextWindow
 import imgui.functionalProgramming.popupModal
 import imgui.functionalProgramming.smallButton
-import imgui.functionalProgramming.tooltip
 import imgui.functionalProgramming.treeNode
 import imgui.functionalProgramming.window
 import imgui.functionalProgramming.withChild
 import imgui.functionalProgramming.withId
 import imgui.functionalProgramming.withItemWidth
 import imgui.functionalProgramming.withStyleVar
+import imgui.functionalProgramming.withTooltip
 import imgui.functionalProgramming.withWindow
 import imgui.internal.Rect
 import imgui.internal.Window
@@ -234,118 +246,90 @@ interface imgui_demoDebugInfo {
                 textWrapped("The logging API redirects all text output so you can easily capture the content of a " +
                         "window or a block. Tree nodes can be automatically expanded. You can also call LogText() to " +
                         "output directly to the log without a visual output.")
-//                logButtons() TODO
+                logButtons()
             }
         }
 
         collapsingHeader("Widgets") {
-            //            if (ImGui::TreeNode("Basic"))
-//                {
-//                        static int clicked = 0;
-//                        if (ImGui::Button("Button"))
-//                                clicked++;
-//                        if (clicked & 1)
-//                        {
-//                                ImGui::SameLine();
-//                                ImGui::Text("Thanks for clicking me!");
-//                            }
-//                    +
-//                        static bool check = true;
-//                        ImGui::Checkbox("checkbox", &check);
-//                    +
-//                        static int e = 0;
-//                        ImGui::RadioButton("radio a", &e, 0); ImGui::SameLine();
-//                        ImGui::RadioButton("radio b", &e, 1); ImGui::SameLine();
-//                        ImGui::RadioButton("radio c", &e, 2);
-//                    +
-//                        // Color buttons, demonstrate using PushID() to add unique identifier in the ID stack, and changing style.
-//                        for (int i = 0; i < 7; i++)
-//                        {
-//                                if (i > 0) ImGui::SameLine();
-//                                ImGui::PushID(i);
-//                                ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(i/7.0f, 0.6f, 0.6f));
-//                                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(i/7.0f, 0.7f, 0.7f));
-//                                ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(i/7.0f, 0.8f, 0.8f));
-//                                ImGui::Button("Click");
-//                                ImGui::PopStyleColor(3);
-//                                ImGui::PopID();
-//                            }
-//                    +
-//                        ImGui::Text("Hover over me");
-//                        if (ImGui::IsItemHovered())
-//                                ImGui::SetTooltip("I am a tooltip");
-//                    +
-//                        ImGui::SameLine();
-//                        ImGui::Text("- or me");
-//                        if (ImGui::IsItemHovered())
-//                            {
-//                                    ImGui::BeginTooltip();
-//                                    ImGui::Text("I am a fancy tooltip");
-//                                    static float arr[] = { 0.6f, 0.1f, 1.0f, 0.5f, 0.92f, 0.1f, 0.2f };
-//                                    ImGui::PlotLines("Curve", arr, IM_ARRAYSIZE(arr));
-//                                    ImGui::EndTooltip();
-//                                }
-//                    +
-//                        // Testing IMGUI_ONCE_UPON_A_FRAME macro
-//                        //for (int i = 0; i < 5; i++)
-//                        //{
-//                        //  IMGUI_ONCE_UPON_A_FRAME
-//                        //  {
-//                        //      ImGui::Text("This will be displayed only once.");
-//                        //  }
-//                        //}
-//                    +
-//                        ImGui::Separator();
-//                    +
-//                        ImGui::LabelText("label", "Value");
-//                    +
-//                        static int item = 1;
-//                        ImGui::Combo("combo", &item, "aaaa\0bbbb\0cccc\0dddd\0eeee\0\0");   // Combo using values packed in a single constant string (for really quick combo)
-//                    +
-//                        const char* items[] = { "AAAA", "BBBB", "CCCC", "DDDD", "EEEE", "FFFF", "GGGG", "HHHH", "IIII", "JJJJ", "KKKK" };
-//                        static int item2 = -1;
-//                        ImGui::Combo("combo scroll", &item2, items, IM_ARRAYSIZE(items));   // Combo using proper array. You can also pass a callback to retrieve array value, no need to create/copy an array just for that.
-//                    +
-//                        {
-//                                static char str0[128] = "Hello, world!";
-//                                static int i0=123;
-//                                static float f0=0.001f;
-//                                ImGui::InputText("input text", str0, IM_ARRAYSIZE(str0));
-//                                ImGui::SameLine(); ShowHelpMarker("Hold SHIFT or use mouse to select text.\n" "CTRL+Left/Right to word jump.\n" "CTRL+A or double-click to select all.\n" "CTRL+X,CTRL+C,CTRL+V clipboard.\n" "CTRL+Z,CTRL+Y undo/redo.\n" "ESCAPE to revert.\n");
-//                        +
-//                                ImGui::InputInt("input int", &i0);
-//                                ImGui::SameLine(); ShowHelpMarker("You can apply arithmetic operators +,*,/ on numerical values.\n  e.g. [ 100 ], input \'*2\', result becomes [ 200 ]\nUse +- to subtract.\n");
-//                        +
-//                                ImGui::InputFloat("input float", &f0, 0.01f, 1.0f);
-//                        +
-//                                static float vec4a[4] = { 0.10f, 0.20f, 0.30f, 0.44f };
-//                                ImGui::InputFloat3("input float3", vec4a);
-//                            }
-//                    +
-//                        {
-//                                static int i1=50, i2=42;
-//                                ImGui::DragInt("drag int", &i1, 1);
-//                                ImGui::SameLine(); ShowHelpMarker("Click and drag to edit value.\nHold SHIFT/ALT for faster/slower edit.\nDouble-click or CTRL+click to input value.");
-//                        +
-//                                ImGui::DragInt("drag int 0..100", &i2, 1, 0, 100, "%.0f%%");
-//                        +
-//                                static float f1=1.00f, f2=0.0067f;
-//                                ImGui::DragFloat("drag float", &f1, 0.005f);
-//                                ImGui::DragFloat("drag small float", &f2, 0.0001f, 0.0f, 0.0f, "%.06f ns");
-//                            }
-//                    +
-//                        {
-//                                static int i1=0;
-//                                ImGui::SliderInt("slider int", &i1, -1, 3);
-//                                ImGui::SameLine(); ShowHelpMarker("CTRL+click to input value.");
-//                        +
-//                                static float f1=0.123f, f2=0.0f;
-//                                ImGui::SliderFloat("slider float", &f1, 0.0f, 1.0f, "ratio = %.3f");
-//                                ImGui::SliderFloat("slider log float", &f2, -10.0f, 10.0f, "%.4f", 3.0f);
-//                                static float angle = 0.0f;
-//                                ImGui::SliderAngle("slider angle", &angle);
-//                            }
-//                    +
+            treeNode("Basic") {
+                if (button("Button")) clicked++
+                if (clicked has 1) {
+                    sameLine()
+                    text("Thanks for clicking me!")
+                }
+                checkbox("checkbox", ::check)
+
+                radioButton("radio a", ::e, 0); sameLine()
+                radioButton("radio b", ::e, 1); sameLine()
+                radioButton("radio c", ::e, 2)
+                // Color buttons, demonstrate using PushID() to add unique identifier in the ID stack, and changing style.
+                for (i in 0..6) {
+                    if (i > 0) sameLine()
+                    pushId(i)
+                    pushStyleColor(Col.Button, Color.hsv(i / 7f, 0.6f, 0.6f))
+                    pushStyleColor(Col.ButtonHovered, Color.hsv(i / 7f, 0.7f, 0.7f))
+                    pushStyleColor(Col.ButtonActive, Color.hsv(i / 7f, 0.8f, 0.8f))
+                    button("Click")
+                    popStyleColor(3)
+                    popId()
+                }
+
+                text("Hover over me")
+                if (isItemHovered()) setTooltip("I am a tooltip")
+                sameLine()
+                text("- or me")
+                if (isItemHovered())
+                    withTooltip {
+                        text("I am a fancy tooltip")
+                        plotLines("Curve", arr)
+                    }
+                // Testing IMGUI_ONCE_UPON_A_FRAME macro
+                //for (int i = 0; i < 5; i++)
+                //{
+                //  IMGUI_ONCE_UPON_A_FRAME
+                //  {
+                //      ImGui::Text("This will be displayed only once.");
+                //  }
+                //}
+
+                separator()
+                labelText("label", "Value")
+                // Combo using values packed in a single constant string (for really quick combo)
+                combo("combo", ::item, "aaaa\u0000bbbb\u0000cccc\u0000dddd\u0000eeee\u0000\u0000")
+                val items = arrayOf("AAAA", "BBBB", "CCCC", "DDDD", "EEEE", "FFFF", "GGGG", "HHHH", "IIII", "JJJJ", "KKKK")
+                // Combo using proper array. You can also pass a callback to retrieve array value, no need to create/copy an array just for that.
+                combo("combo scroll", ::item2, items)
+
+                run {
+                    inputText("input text", str0, str0.size)
+                    sameLine(); showHelpMarker("Hold SHIFT or use mouse to select text.\nCTRL+Left/Right to word jump.\nCTRL+A or double-click to select all.\nCTRL+X,CTRL+C,CTRL+V clipboard.\nCTRL+Z,CTRL+Y undo/redo.\nESCAPE to revert.\n")
+
+                    inputInt("input int", ::i0)
+                    sameLine(); showHelpMarker("You can apply arithmetic operators +,*,/ on numerical values.\n  e.g. [ 100 ], input \'*2\', result becomes [ 200 ]\nUse +- to subtract.\n")
+
+                    inputFloat("input float", ::f0, 0.01f, 1f)
+
+                    inputFloat3("input float3", vec4a)
+                }
+                run {
+                    dragInt("drag int", ::i1, 1f)
+                    sameLine(); showHelpMarker("Click and drag to edit value.\nHold SHIFT/ALT for faster/slower edit.\nDouble-click or CTRL+click to input value.")
+
+                    dragInt("drag int 0..100", ::i2, 1f, 0, 100, "%.0f%%")
+
+                    dragFloat("drag float", ::f1, 0.005f)
+                    dragFloat("drag small float", ::f2, 0.0001f, 0f, 0f, "%.06f ns")
+                }
+                run {
+                    sliderInt("slider int", ::i3, -1, 3)
+                    sameLine(); showHelpMarker("CTRL+click to input value.")
+
+                    sliderFloat("slider float", ::f3, 0f, 1f, "ratio = %.3f")
+                    sliderFloat("slider log float", ::f4, -10f, 10f, "%.4f", 3f)
+
+                    sliderAngle("slider angle", ::angle)
+                }
+
 //                        static float col1[3] = { 1.0f,0.0f,0.2f };
 //                        static float col2[4] = { 0.4f,0.7f,0.0f,0.5f };
 //                        ImGui::ColorEdit3("color 1", col1);
@@ -361,9 +345,7 @@ interface imgui_demoDebugInfo {
 //                        //ImGui::PushItemWidth(-1);
 //                        //ImGui::ListBox("##listbox2", &listbox_item_current2, listbox_items, IM_ARRAYSIZE(listbox_items), 4);
 //                        //ImGui::PopItemWidth();
-//                    +
-//                        ImGui::TreePop();
-//                    }
+            }
 
             treeNode("Trees") {
 
@@ -507,7 +489,7 @@ interface imgui_demoDebugInfo {
                 text("%.0fx%.0f", texSize.x, texSize.y)
                 image(texId, texSize, Vec2(), Vec2(1), Vec4.fromColor(255, 255, 255, 255), Vec4.fromColor(255, 255, 255, 128))
                 if (isItemHovered())
-                    tooltip {
+                    withTooltip {
                         val focusSz = 32f
                         val focus = glm.clamp(mousePos - texScreenPos - focusSz * 0.5f, Vec2(), texSize - focusSz)
                         text("Min: (%.2f, %.2f)", focus.x, focus.y)
@@ -2075,7 +2057,7 @@ interface imgui_demoDebugInfo {
                                         functions available to generate a string.                                     */
                                     font.renderChar(drawList, cellSize.x, cellP1, Col.Text.u32, (base + n).c)
                                     if (glyph != null && isMouseHoveringRect(cellP1, cellP2))
-                                        tooltip {
+                                        withTooltip {
                                             text("Codepoint: U+%04X", base + n)
                                             separator()
                                             text("AdvanceX+1: %.1f", glyph.advanceX)
@@ -2228,15 +2210,14 @@ interface imgui_demoDebugInfo {
                 4 -> setNextWindowSizeConstraints(Vec2(), Vec2(Float.MAX_VALUE), CustomConstraints.square)          // Always Square
                 5 -> setNextWindowSizeConstraints(Vec2(), Vec2(Float.MAX_VALUE), CustomConstraints.step, 100)// Fixed Step
             }
-            window("Example: Constrained Resize", open) {
+            withWindow("Example: Constrained Resize", open) {
                 val desc = listOf("Resize vertical only", "Resize horizontal only", "Width > 100, Height > 100",
                         "Width 300-400", "Custom: Always Square", "Custom: Fixed Steps (100)")
                 combo("Constraint", ::type, desc)
                 button("200x200") { setWindowSize(Vec2(200)) }; sameLine()
                 button("500x500") { setWindowSize(Vec2(500)) }; sameLine()
                 button("800x200") { setWindowSize(Vec2(800, 200)) }
-                for (i in 0 until 10)
-                    text("Hello, sailor! Making this line long enough for the example.")
+                for (i in 0 until 10) text("Hello, sailor! Making this line long enough for the example.")
             }
         }
 
@@ -2264,18 +2245,16 @@ interface imgui_demoDebugInfo {
             val windowPosPivot = Vec2(if (corner has 1) 1f else 0f, if (corner has 2) 1f else 0f)
             setNextWindowPos(windowPos, Cond.Always, windowPosPivot)
             pushStyleColor(Col.WindowBg, Vec4(0f, 0f, 0f, 0.3f))  // Transparent background
-            if (_begin("Example: Fixed Overlay", open, Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings)) {
+            window("Example: Fixed Overlay", open, Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings) {
                 text("Simple overlay\nin the corner of the screen.\n(right-click to change position)")
                 separator()
                 text("Mouse Position: (%.1f,%.1f)".format(IO.mousePos.x, IO.mousePos.y))
-//                if(beginPopupContextWindow()) { TODO
-//                    if (ImGui::MenuItem("Top-left", NULL, corner == 0)) corner = 0
-//                    if (ImGui::MenuItem("Top-right", NULL, corner == 1)) corner = 1
-//                    if (ImGui::MenuItem("Bottom-left", NULL, corner == 2)) corner = 2
-//                    if (ImGui::MenuItem("Bottom-right", NULL, corner == 3)) corner = 3
-//                    ImGui::EndPopup()
-//                }
-                end()
+                popupContextWindow {
+                    menuItem("Top-left", "", corner == 0) { corner = 0 }
+                    menuItem("Top-right", "", corner == 1) { corner = 1 }
+                    menuItem("Bottom-left", "", corner == 2) { corner = 2 }
+                    menuItem("Bottom-right", "", corner == 3) { corner = 3 }
+                }
             }
             popStyleColor()
         }
@@ -2286,26 +2265,23 @@ interface imgui_demoDebugInfo {
          *  Read section "How can I have multiple widgets with the same label? Can I have widget without a label? (Yes).
          *  A primer on the purpose of labels/IDs." about ID.   */
         fun showExampleAppManipulatingWindowTitle(open: KMutableProperty0<Boolean>) {
-
             /*  By default, Windows are uniquely identified by their title.
                 You can use the "##" and "###" markers to manipulate the display/ID.
-             */
-//TODO
-            // Using "##" to display same title but have unique identifier.
-//            setNextWindowPos(Vec2(100), Cond.FirstUseEver)
-//            window("Same title as another window##1") {
-//                text("This is window 1.\nMy title is the same as window 2, but my identifier is unique.")
-//            }
-//
-//            setNextWindowPos(Vec2(100, 200), Cond.FirstUseEver)
-//            window("Same title as another window##2") {
-//                text("This is window 2.\nMy title is the same as window 1, but my identifier is unique.")
-//            }
-//
-//            // Using "###" to display a changing title but keep a static identifier "AnimatedTitle"
-//            val title = "Animated title ${"|/-\\"[(time / 0.25f).i and 3]} ${glm_.detail.Random.int}###AnimatedTitle"
-//            setNextWindowPos(Vec2(100, 300), Cond.FirstUseEver)
-//            window(title) { text("This window has a changing title.") }
+                Using "##" to display same title but have unique identifier.    */
+            setNextWindowPos(Vec2(100), Cond.FirstUseEver)
+            withWindow("Same title as another window##1") {
+                text("This is window 1.\nMy title is the same as window 2, but my identifier is unique.")
+            }
+
+            setNextWindowPos(Vec2(100, 200), Cond.FirstUseEver)
+            withWindow("Same title as another window##2") {
+                text("This is window 2.\nMy title is the same as window 1, but my identifier is unique.")
+            }
+
+            // Using "###" to display a changing title but keep a static identifier "AnimatedTitle"
+            val title = "Animated title ${"|/-\\"[(time / 0.25f).i and 3]} ${glm_.detail.Random.int}###AnimatedTitle"
+            setNextWindowPos(Vec2(100, 300), Cond.FirstUseEver)
+            withWindow(title) { text("This window has a changing title.") }
         }
 
         /** Demonstrate using the low-level ImDrawList to draw custom shapes.   */
@@ -2628,6 +2604,25 @@ interface imgui_demoDebugInfo {
                     label""".trimMargin() +
                     "\tlock cmpxchg8b eax\n").toCharArray(it)
         }
+
+        var clicked = 0
+        var check = true
+        var e = 0
+        val arr = floatArrayOf(0.6f, 0.1f, 1f, 0.5f, 0.92f, 0.1f, 0.2f)
+        var item = 1
+        var item2 = -1
+        var str0 = "Hello, world!".toCharArray()
+        var i0 = 123
+        var f0 = 0.001f
+        val vec4a = floatArrayOf(0.1f, 0.2f, 0.3f, 0.44f)
+        var i1 = 50
+        var i2 = 42
+        var f1 = 1f
+        var f2 = 0.0067f
+        var i3 = 0
+        var f3 = 0.123f
+        var f4 = 0f
+        var angle = 0f
     }
 
     /** Demonstrating creating a simple console window, with scrolling, filtering, completion and history.

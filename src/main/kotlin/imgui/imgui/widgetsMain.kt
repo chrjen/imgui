@@ -22,6 +22,7 @@ import imgui.ImGui.isWindowAppearing
 import imgui.ImGui.itemAdd
 import imgui.ImGui.itemSize
 import imgui.ImGui.openPopupEx
+import imgui.ImGui.plotEx
 import imgui.ImGui.popId
 import imgui.ImGui.popStyleVar
 import imgui.ImGui.pushId
@@ -39,6 +40,7 @@ import imgui.ImGui.setScrollHere
 import imgui.ImGui.spacing
 import imgui.imgui.imgui_internal.Companion.smallSquareSize
 import imgui.internal.Dir
+import imgui.internal.PlotType
 import imgui.internal.Rect
 import kotlin.reflect.KMutableProperty0
 import imgui.Context as g
@@ -249,7 +251,10 @@ interface imgui_widgetsMain {
 
     fun radioButton(label: String, v: IntArray, vButton: Int) = radioButton(label, v[0] == vButton).also { if (it) v[0] = vButton }
     fun radioButton(label: String, v: KMutableProperty0<Int>, vButton: Int) = radioButton(label, v() == vButton).also { if (it) v.set(vButton) }
-//    IMGUI_API bool          Combo(const char* label, int* current_item, const char* const* items, int items_count, int height_in_items = -1);
+
+    /** Combo box helper allowing to pass an array of strings.  */
+    fun combo(label: String, currentItem: KMutableProperty0<Int>, items: Array<String>, itemsCount: Int = items.size,
+              heightInItems: Int = -1) = combo(label, currentItem, items.toList(), heightInItems)
 
     /** Combo box helper allowing to pass all items in a single string.
      *  separate items with \0, end item-list with \0\0     */
@@ -371,7 +376,16 @@ interface imgui_widgetsMain {
         return valueChanged
     }
 
-//    IMGUI_API void          PlotLines(const char* label, const float* values, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0,0), int stride = sizeof(float));
+    class PlotArray(val values: FloatArray, val stride: Int) {
+        operator fun get(idx: Int) = values[idx * stride]
+    }
+
+    fun plotLines(label: String, values: FloatArray, valuesOffset: Int = 0, overlayText: String = "", scaleMin: Float = Float.MAX_VALUE,
+                  scaleMax: Float = Float.MAX_VALUE, graphSize: Vec2 = Vec2(), stride: Int = 1) {
+
+        val data = PlotArray(values, stride)
+        plotEx(PlotType.Lines, label, data, valuesOffset, overlayText, scaleMin, scaleMax, graphSize)
+    }
 //    IMGUI_API void          PlotLines(const char* label, float (*values_getter)(void* data, int idx), void* data, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0,0));
 //    IMGUI_API void          PlotHistogram(const char* label, const float* values, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0,0), int stride = sizeof(float));
 //    IMGUI_API void          PlotHistogram(const char* label, float (*values_getter)(void* data, int idx), void* data, int values_count, int values_offset = 0, const char* overlay_text = NULL, float scale_min = FLT_MAX, float scale_max = FLT_MAX, ImVec2 graph_size = ImVec2(0,0));

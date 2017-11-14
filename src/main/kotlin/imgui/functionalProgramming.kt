@@ -6,6 +6,7 @@ import imgui.ImGui.beginChild
 import imgui.ImGui.beginMainMenuBar
 import imgui.ImGui.beginMenu
 import imgui.ImGui.beginMenuBar
+import imgui.ImGui.beginPopupContextWindow
 import imgui.ImGui.beginPopupModal
 import imgui.ImGui.beginTooltip
 import imgui.ImGui.collapsingHeader
@@ -39,7 +40,7 @@ object functionalProgramming {
         if (ImGui.smallButton(label)) block()
     }
 
-    inline fun withWindow(name: String, open: KMutableProperty0<Boolean>?, flags: Int = 0, block: () -> Unit) {
+    inline fun withWindow(name: String, open: KMutableProperty0<Boolean>? = null, flags: Int = 0, block: () -> Unit) {
         _begin(name, open, flags)
         block()
         end()
@@ -139,7 +140,7 @@ object functionalProgramming {
         popId()
     }
 
-    inline fun tooltip(block: () -> Unit) {
+    inline fun withTooltip(block: () -> Unit) {
         beginTooltip()
         block()
         endTooltip()
@@ -149,5 +150,12 @@ object functionalProgramming {
         pushTextWrapPos(wrapPosX)
         block()
         popTextWrapPos()
+    }
+
+    inline fun popupContextWindow(block: () -> Unit) {
+        if (beginPopupContextWindow()) {
+            block()
+            endPopup()
+        }
     }
 }

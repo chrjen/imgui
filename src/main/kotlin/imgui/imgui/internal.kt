@@ -3,6 +3,8 @@ package imgui.imgui
 import gli_.has
 import gli_.hasnt
 import glm_.f
+import glm_.func.common.max
+import glm_.func.common.min
 import glm_.glm
 import glm_.i
 import glm_.vec2.Vec2
@@ -29,6 +31,7 @@ import imgui.ImGui.getColumnOffset
 import imgui.ImGui.getColumnWidth
 import imgui.ImGui.getMouseDragDelta
 import imgui.ImGui.indent
+import imgui.ImGui.inputFloat
 import imgui.ImGui.inputText
 import imgui.ImGui.isMouseClicked
 import imgui.ImGui.isMouseHoveringRect
@@ -51,6 +54,7 @@ import imgui.ImGui.separator
 import imgui.ImGui.setClipboardText
 import imgui.ImGui.setColumnOffset
 import imgui.ImGui.setItemAllowOverlap
+import imgui.ImGui.setTooltip
 import imgui.ImGui.sliderFloat
 import imgui.ImGui.text
 import imgui.ImGui.textLineHeight
@@ -60,6 +64,7 @@ import imgui.imgui.imgui_colums.Companion.pixelsToOffsetNorm
 import imgui.internal.*
 import java.util.*
 import kotlin.apply
+import kotlin.math.min
 import kotlin.reflect.KMutableProperty0
 import imgui.ColorEditFlags as Cef
 import imgui.Context as g
@@ -172,7 +177,7 @@ interface imgui_internal {
                         if (window === g.hoveredWindow) hoveredWindowAboveModal = true
                         i--
                     }
-                    closeInactivePopups(if (hoveredWindowAboveModal) g.hoveredWindow!! else modal!!)
+                    closeInactivePopups(if (hoveredWindowAboveModal) g.hoveredWindow else modal)
                 }
             }
 
@@ -1121,9 +1126,9 @@ interface imgui_internal {
     fun sliderBehavior(frameBb: Rect, id: Int, v: FloatArray, ptr: Int, vMin: Float, vMax: Float, power: Float, decimalPrecision: Int,
                        flags: Int = 0): Boolean {
 
-        f = v[ptr]
-        val res = sliderBehavior(frameBb, id, ::f, vMin, vMax, power, decimalPrecision, flags)
-        v[ptr] = f
+        f0 = v[ptr]
+        val res = sliderBehavior(frameBb, id, ::f0, vMin, vMax, power, decimalPrecision, flags)
+        v[ptr] = f0
         return res
     }
 
@@ -1277,9 +1282,9 @@ interface imgui_internal {
     fun dragBehavior(frameBb: Rect, id: Int, v: FloatArray, ptr: Int, vSpeed: Float, vMin: Float, vMax: Float, decimalPrecision: Int,
                      power: Float): Boolean {
 
-        f = v[ptr]
-        val res = dragBehavior(frameBb, id, ::f, vSpeed, vMin, vMax, decimalPrecision, power)
-        v[ptr] = f
+        f0 = v[ptr]
+        val res = dragBehavior(frameBb, id, ::f0, vSpeed, vMin, vMax, decimalPrecision, power)
+        v[ptr] = f0
         return res
     }
 
@@ -1298,15 +1303,12 @@ interface imgui_internal {
 
         // Process clicking on the drag
         if (g.activeId == id)
-
             if (IO.mouseDown[0]) {
-
                 if (g.activeIdIsJustActivated) {
                     // Lock current value on click
                     g.dragCurrentValue = v()
                     g.dragLastMouseDelta put 0f
                 }
-
                 var vSpeed = vSpeed
                 if (vSpeed == 0f && (vMax - vMin) != 0f && (vMax - vMin) < Float.MAX_VALUE)
                     vSpeed = (vMax - vMin) * g.dragSpeedDefaultRatio
@@ -1341,7 +1343,6 @@ interface imgui_internal {
                         vCur = glm.clamp(vCur, vMin, vMax)
                     g.dragCurrentValue = vCur
                 }
-
                 // Round to user desired precision, then apply
                 vCur = roundScalar(vCur, decimalPrecision)
                 if (v() != vCur) {
@@ -1350,7 +1351,6 @@ interface imgui_internal {
                 }
             } else
                 clearActiveId()
-
         return valueChanged
     }
 //IMGUI_API bool          DragFloatN(const char* label, float* v, int components, float v_speed, float v_min, float v_max, const char* display_format, float power);
@@ -1972,13 +1972,42 @@ interface imgui_internal {
 
         return if (flags has Itf.EnterReturnsTrue) enterPressed else valueChanged
     }
-//IMGUI_API bool          InputFloatN(const char* label, float* v, int components, int decimal_precision, ImGuiInputTextFlags extra_flags);
+
+    fun inputFloatN(label: String, v: FloatArray, components: Int, decimalPrecision: Int, extraFlags: Int): Boolean {
+        val window = currentWindow
+        if (window.skipItems) return false
+        var valueChanged = false
+        beginGroup()
+        pushId(label)
+        pushMultiItemsWidths(components)
+        for (i in 0 until components) {
+            pushId(i)
+            f0 = v[i]
+            valueChanged = valueChanged or inputFloat("##v", ::f0, 0f, 0f, decimalPrecision, extraFlags)
+            v[i] = f0
+            sameLine(0f, style.itemInnerSpacing.x)
+            popId()
+            popItemWidth()
+        }
+        popId()
+        textUnformatted(label, findRenderedTextEnd(label))
+        endGroup()
+        return valueChanged
+    }
 //IMGUI_API bool          InputIntN(const char* label, int* v, int components, ImGuiInputTextFlags extra_flags);
 
     /** NB: scalar_format here must be a simple "%xx" format string with no prefix/suffix (unlike the Drag/Slider
      *  functions "display_format" argument)    */
     fun inputScalarEx(label: String, dataType: DataType, data: IntArray, step: Number?, stepFast: Number?, scalarFormat: String,
                       extraFlags: Int): Boolean {
+        i0 = data[0]
+        val res = inputScalarEx(label, dataType, ::i0, step, stepFast, scalarFormat, extraFlags)
+        data[0] = i0
+        return res
+    }
+
+    fun inputScalarEx(label: String, dataType: DataType, data: KMutableProperty0<Int>, step: Number?, stepFast: Number?,
+                      scalarFormat: String, extraFlags: Int): Boolean {
 
         val window = currentWindow
         if (window.skipItems) return false
@@ -2267,17 +2296,111 @@ interface imgui_internal {
         window.idStack.push(id)
     }
 
-//IMGUI_API void          PlotEx(ImGuiPlotType plot_type, const char* label, float (*values_getter)(void* data, int idx), void* data, int values_count, int values_offset, const char* overlay_text, float scale_min, float scale_max, ImVec2 graph_size);
+
+    fun plotEx(plotType: PlotType, label: String, data: imgui_widgetsMain.PlotArray, valuesOffset: Int, overlayText: String,
+               scaleMin: Float, scaleMax: Float, graphSize: Vec2) {
+
+        val window = currentWindow
+        if (window.skipItems) return
+
+        var scaleMin = scaleMin
+        var scaleMax = scaleMax
+        val valuesCount = data.values.size
+
+        val labelSize = calcTextSize(label, 0, true)
+        if (graphSize.x == 0f) graphSize.x = calcItemWidth()
+        if (graphSize.y == 0f) graphSize.y = labelSize.y + style.framePadding.y * 2
+
+        val frameBb = Rect(window.dc.cursorPos, window.dc.cursorPos + Vec2(graphSize))
+        val innerBb = Rect(frameBb.min + style.framePadding, frameBb.max - style.framePadding)
+        val totalBb = Rect(frameBb.min, frameBb.max + Vec2(if (labelSize.x > 0f) style.itemInnerSpacing.x + labelSize.x else 0f, 0))
+        itemSize(totalBb, style.framePadding.y)
+        if (!itemAdd(totalBb, 0)) return
+        val hovered = itemHoverable(innerBb, 0)
+
+        // Determine scale from values if not specified
+        if (scaleMin == Float.MAX_VALUE || scaleMax == Float.MAX_VALUE) {
+            var vMin = Float.MAX_VALUE
+            var vMax = -Float.MAX_VALUE
+            for (i in 0 until valuesCount) {
+                val v = data[i]
+                vMin = vMin min v
+                vMax = vMax max v
+            }
+            if (scaleMin == Float.MAX_VALUE) scaleMin = vMin
+            if (scaleMax == Float.MAX_VALUE) scaleMax = vMax
+        }
+
+        renderFrame(frameBb.min, frameBb.max, Col.FrameBg.u32, true, style.frameRounding)
+
+        if (valuesCount > 0) {
+            val resW = min(graphSize.x.i, valuesCount) + if (plotType == PlotType.Lines) -1 else 0
+            val itemCount = valuesCount + if (plotType == PlotType.Lines) -1 else 0
+
+            // Tooltip on hover
+            var vHovered = -1
+            if (hovered) {
+                val t = glm.clamp((IO.mousePos.x - innerBb.min.x) / (innerBb.max.x - innerBb.min.x), 0f, 0.9999f)
+                val vIdx = (t * itemCount).i
+                assert(vIdx in 0 until valuesCount)
+
+                val v0 = data[(vIdx + valuesOffset) % valuesCount]
+                val v1 = data[(vIdx + 1 + valuesOffset) % valuesCount]
+                when (plotType) {
+                    PlotType.Lines -> setTooltip("$vIdx: %8.4g\n${vIdx + 1}: %8.4g", v0, v1)
+                    PlotType.Histogram -> setTooltip("$vIdx: %8.4g", v0)
+                }
+                vHovered = vIdx
+            }
+
+            val tStep = 1f / resW
+
+            val v0 = data[(0 + valuesOffset) % valuesCount]
+            var t0 = 0f
+            // Point in the normalized space of our target rectangle
+            val tp0 = Vec2(t0, 1f - saturate((v0 - scaleMin) / (scaleMax - scaleMin)))
+            // Where does the zero line stands
+            val histogramZeroLineT = if (scaleMin * scaleMax < 0f) -scaleMin / (scaleMax - scaleMin) else if (scaleMin < 0f) 0f else 1f
+
+            val colBase = (if (plotType == PlotType.Lines) Col.PlotLines else Col.PlotHistogram).u32
+            val colHovered = (if (plotType == PlotType.Lines) Col.PlotLinesHovered else Col.PlotHistogramHovered).u32
+
+            for (n in 0 until resW) {
+                val t1 = t0 + tStep
+                val v1Idx = (t0 * itemCount + 0.5f).i
+                assert(v1Idx in 0 until valuesCount)
+                val v1 = data[(v1Idx + valuesOffset + 1) % valuesCount]
+                val tp1 = Vec2(t1, 1f - saturate((v1 - scaleMin) / (scaleMax - scaleMin)))
+
+                // NB: Draw calls are merged together by the DrawList system. Still, we should render our batch are lower level to save a bit of CPU.
+                val pos0 = innerBb.min.lerp(innerBb.max, tp0)
+                val pos1 = innerBb.min.lerp(innerBb.max, if (plotType == PlotType.Lines) tp1 else Vec2(tp1.x, histogramZeroLineT))
+                when (plotType) {
+                    PlotType.Lines -> window.drawList.addLine(pos0, pos1, if (vHovered == v1Idx) colHovered else colBase)
+                    PlotType.Histogram -> {
+                        if (pos1.x >= pos0.x + 2f) pos1.x -= 1f
+                        window.drawList.addRectFilled(pos0, pos1, if (vHovered == v1Idx) colHovered else colBase)
+                    }
+                }
+                t0 = t1
+                tp0 put tp1
+            }
+        }
+        // Text overlay
+        if (overlayText.isNotEmpty())
+            renderTextClipped(Vec2(frameBb.min.x, frameBb.min.y + style.framePadding.y), frameBb.max, overlayText, 0, null, Vec2(0.5f, 0f))
+        if (labelSize.x > 0f)
+            renderText(Vec2(frameBb.max.x + style.itemInnerSpacing.x, innerBb.min.y), label)
+    }
 
 
     /** Parse display precision back from the display format string */
     fun parseFormatPrecision(fmt: String, defaultPrecision: Int): Int {
-
         var precision = defaultPrecision
         if (fmt.contains('.')) {
-            val s = fmt.substringAfter('.')
+            val s = fmt.substringAfter('.').filter { it.isDigit() }
             if (s.isNotEmpty()) {
-                precision = Character.getNumericValue(s[0])
+                precision = java.lang.Integer.parseInt(s)   // TODo glm
                 if (precision < 0 || precision > 10)
                     precision = defaultPrecision
             }
@@ -2366,6 +2489,7 @@ interface imgui_internal {
 
         val smallSquareSize get() = g.fontSize + style.framePadding.y * 2f
 
-        private var f = 0f
+        private var f0 = 0f
+        private var i0 = 0
     }
 }
