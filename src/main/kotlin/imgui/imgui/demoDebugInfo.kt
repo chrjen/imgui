@@ -21,12 +21,28 @@ import imgui.ImGui.bulletText
 import imgui.ImGui.button
 import imgui.ImGui.checkbox
 import imgui.ImGui.closeCurrentPopup
+import imgui.ImGui.colorButton
+import imgui.ImGui.colorConvertHSVtoRGB
+import imgui.ImGui.colorEdit3
+import imgui.ImGui.colorEdit4
 import imgui.ImGui.colorEditVec4
+import imgui.ImGui.colorPicker4
 import imgui.ImGui.columns
 import imgui.ImGui.combo
+import imgui.ImGui.contentRegionAvailWidth
+import imgui.ImGui.cursorPos
 import imgui.ImGui.cursorScreenPos
+import imgui.ImGui.cursorStartPos
 import imgui.ImGui.dragFloat
+import imgui.ImGui.dragFloat2
+import imgui.ImGui.dragFloat3
+import imgui.ImGui.dragFloat4
+import imgui.ImGui.dragFloatRange2
 import imgui.ImGui.dragInt
+import imgui.ImGui.dragInt2
+import imgui.ImGui.dragInt3
+import imgui.ImGui.dragInt4
+import imgui.ImGui.dragIntRange2
 import imgui.ImGui.dummy
 import imgui.ImGui.end
 import imgui.ImGui.endChild
@@ -35,19 +51,32 @@ import imgui.ImGui.endMenu
 import imgui.ImGui.endMenuBar
 import imgui.ImGui.endTooltip
 import imgui.ImGui.fontSize
+import imgui.ImGui.getId
 import imgui.ImGui.image
 import imgui.ImGui.imageButton
 import imgui.ImGui.indent
 import imgui.ImGui.inputFloat
+import imgui.ImGui.inputFloat2
 import imgui.ImGui.inputFloat3
+import imgui.ImGui.inputFloat4
 import imgui.ImGui.inputInt
+import imgui.ImGui.inputInt2
+import imgui.ImGui.inputInt3
+import imgui.ImGui.inputInt4
 import imgui.ImGui.inputText
+import imgui.ImGui.isItemActive
 import imgui.ImGui.isItemClicked
 import imgui.ImGui.isItemHovered
 import imgui.ImGui.isMouseDoubleClicked
 import imgui.ImGui.isMouseHoveringRect
+import imgui.ImGui.itemRectMax
+import imgui.ImGui.itemRectMin
+import imgui.ImGui.itemRectSize
 import imgui.ImGui.itemsLineHeightWithSpacing
 import imgui.ImGui.labelText
+import imgui.ImGui.listBox
+import imgui.ImGui.listBoxFooter
+import imgui.ImGui.listBoxHeader
 import imgui.ImGui.logButtons
 import imgui.ImGui.logFinish
 import imgui.ImGui.logToClipboard
@@ -56,6 +85,7 @@ import imgui.ImGui.mousePos
 import imgui.ImGui.newLine
 import imgui.ImGui.nextColumn
 import imgui.ImGui.openPopup
+import imgui.ImGui.plotHistogram
 import imgui.ImGui.plotLines
 import imgui.ImGui.popFont
 import imgui.ImGui.popId
@@ -63,6 +93,7 @@ import imgui.ImGui.popItemWidth
 import imgui.ImGui.popStyleColor
 import imgui.ImGui.popStyleVar
 import imgui.ImGui.popTextWrapPos
+import imgui.ImGui.progressBar
 import imgui.ImGui.pushFont
 import imgui.ImGui.pushId
 import imgui.ImGui.pushItemWidth
@@ -71,24 +102,37 @@ import imgui.ImGui.pushStyleVar
 import imgui.ImGui.pushTextWrapPos
 import imgui.ImGui.radioButton
 import imgui.ImGui.sameLine
+import imgui.ImGui.scrollMaxX
+import imgui.ImGui.scrollMaxY
+import imgui.ImGui.scrollX
+import imgui.ImGui.scrollY
 import imgui.ImGui.selectable
 import imgui.ImGui.separator
+import imgui.ImGui.setColorEditOptions
 import imgui.ImGui.setNextWindowPos
 import imgui.ImGui.setNextWindowSize
 import imgui.ImGui.setNextWindowSizeConstraints
+import imgui.ImGui.setScrollFromPosY
 import imgui.ImGui.setScrollHere
 import imgui.ImGui.setTooltip
 import imgui.ImGui.setWindowFontScale
 import imgui.ImGui.setWindowSize
 import imgui.ImGui.sliderAngle
 import imgui.ImGui.sliderFloat
-import imgui.ImGui.sliderFloatVec2
+import imgui.ImGui.sliderFloat2
+import imgui.ImGui.sliderFloat3
+import imgui.ImGui.sliderFloat4
 import imgui.ImGui.sliderInt
+import imgui.ImGui.sliderInt2
+import imgui.ImGui.sliderInt3
+import imgui.ImGui.sliderInt4
+import imgui.ImGui.sliderVec2
 import imgui.ImGui.smallButton
 import imgui.ImGui.spacing
 import imgui.ImGui.text
 import imgui.ImGui.textColored
 import imgui.ImGui.textDisabled
+import imgui.ImGui.textLineHeight
 import imgui.ImGui.textUnformatted
 import imgui.ImGui.textWrapped
 import imgui.ImGui.time
@@ -97,7 +141,10 @@ import imgui.ImGui.treeNodeExV
 import imgui.ImGui.treeNodeToLabelSpacing
 import imgui.ImGui.treePop
 import imgui.ImGui.unindent
+import imgui.ImGui.vSliderFloat
+import imgui.ImGui.vSliderInt
 import imgui.ImGui.version
+import imgui.ImGui.windowContentRegionWidth
 import imgui.ImGui.windowDrawList
 import imgui.ImGui.windowWidth
 import imgui.functionalProgramming.button
@@ -106,12 +153,14 @@ import imgui.functionalProgramming.mainMenuBar
 import imgui.functionalProgramming.menu
 import imgui.functionalProgramming.menuBar
 import imgui.functionalProgramming.menuItem
+import imgui.functionalProgramming.popup
 import imgui.functionalProgramming.popupContextWindow
 import imgui.functionalProgramming.popupModal
 import imgui.functionalProgramming.smallButton
 import imgui.functionalProgramming.treeNode
 import imgui.functionalProgramming.window
 import imgui.functionalProgramming.withChild
+import imgui.functionalProgramming.withGroup
 import imgui.functionalProgramming.withId
 import imgui.functionalProgramming.withItemWidth
 import imgui.functionalProgramming.withStyleVar
@@ -121,6 +170,8 @@ import imgui.internal.Rect
 import imgui.internal.Window
 import imgui.or
 import java.util.*
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.reflect.KMutableProperty0
 import imgui.ColorEditFlags as Cef
 import imgui.Context as g
@@ -196,7 +247,7 @@ interface imgui_demoDebugInfo {
         }
 
         //pushItemWidth(getWindowWidth() * 0.65f);    // 2/3 of the space for widget and 1/3 for labels
-        pushItemWidth(-140f) // Right align, keep 140 pixels for labels
+        pushItemWidth(-140) // Right align, keep 140 pixels for labels
 
         text("dear imgui says hello. ($version)")
 
@@ -232,11 +283,11 @@ interface imgui_demoDebugInfo {
 
         collapsingHeader("Window options") {
 
-            checkbox("No titlebar", ::noTitlebar); sameLine(150f)
-            checkbox("No border", ::noBorder); sameLine(300f)
+            checkbox("No titlebar", ::noTitlebar); sameLine(150)
+            checkbox("No border", ::noBorder); sameLine(300)
             checkbox("No resize", ::noResize)
-            checkbox("No move", ::noMove); sameLine(150f)
-            checkbox("No scrollbar", ::noScrollbar); sameLine(300f)
+            checkbox("No move", ::noMove); sameLine(150)
+            checkbox("No scrollbar", ::noScrollbar); sameLine(300)
             checkbox("No collapse", ::noCollapse)
             checkbox("No menu", ::noMenu)
 
@@ -251,6 +302,7 @@ interface imgui_demoDebugInfo {
         }
 
         collapsingHeader("Widgets") {
+
             treeNode("Basic") {
                 if (button("Button")) clicked++
                 if (clicked has 1) {
@@ -283,15 +335,6 @@ interface imgui_demoDebugInfo {
                         text("I am a fancy tooltip")
                         plotLines("Curve", arr)
                     }
-                // Testing IMGUI_ONCE_UPON_A_FRAME macro
-                //for (int i = 0; i < 5; i++)
-                //{
-                //  IMGUI_ONCE_UPON_A_FRAME
-                //  {
-                //      ImGui::Text("This will be displayed only once.");
-                //  }
-                //}
-
                 separator()
                 labelText("label", "Value")
                 // Combo using values packed in a single constant string (for really quick combo)
@@ -330,39 +373,27 @@ interface imgui_demoDebugInfo {
                     sliderAngle("slider angle", ::angle)
                 }
 
-//                        static float col1[3] = { 1.0f,0.0f,0.2f };
-//                        static float col2[4] = { 0.4f,0.7f,0.0f,0.5f };
-//                        ImGui::ColorEdit3("color 1", col1);
-//                        ImGui::SameLine(); ShowHelpMarker("Click on the colored square to open a color picker.\nRight-click on the colored square to show options.\nCTRL+click on individual component to input value.\n");
-//                    +
-//                        ImGui::ColorEdit4("color 2", col2);
-//                    +
-//                        const char* listbox_items[] = { "Apple", "Banana", "Cherry", "Kiwi", "Mango", "Orange", "Pineapple", "Strawberry", "Watermelon" };
-//                        static int listbox_item_current = 1;
-//                        ImGui::ListBox("listbox\n(single select)", &listbox_item_current, listbox_items, IM_ARRAYSIZE(listbox_items), 4);
-//                    +
-//                        //static int listbox_item_current2 = 2;
-//                        //ImGui::PushItemWidth(-1);
-//                        //ImGui::ListBox("##listbox2", &listbox_item_current2, listbox_items, IM_ARRAYSIZE(listbox_items), 4);
-//                        //ImGui::PopItemWidth();
+                colorEdit3("color 1", col1)
+                sameLine(); showHelpMarker("Click on the colored square to open a color picker.\nRight-click on the colored square to show options.\nCTRL+click on individual component to input value.\n")
+
+                colorEdit4("color 2", col2)
+
+                val listboxItems = arrayOf("Apple", "Banana", "Cherry", "Kiwi", "Mango", "Orange", "Pineapple", "Strawberry", "Watermelon")
+                listBox("listbox\n(single select)", ::listboxItemCurrent, listboxItems, 4)
             }
 
             treeNode("Trees") {
-
                 treeNode("Basic trees") {
-
-                    for (i in 0..4)
-                        treeNode(i, "Child $i") {
-                            text("blah blah")
-                            sameLine()
-                            smallButton("print") { println("Child $i pressed") }
-                        }
+                    for (i in 0..4) treeNode(i, "Child $i") {
+                        text("blah blah")
+                        sameLine()
+                        smallButton("print") { println("Child $i pressed") }
+                    }
                 }
 
                 treeNode("Advanced, with Selectable nodes") {
 
-                    showHelpMarker("""|This is a more standard looking tree with selectable nodes.
-                        |Click to select, CTRL+Click to toggle, click on arrows or double-click to open.""".trimMargin())
+                    showHelpMarker("This is a more standard looking tree with selectable nodes.\nClick to select, CTRL+Click to toggle, click on arrows or double-click to open.")
                     checkbox("Align label with current X position)", ::alignLabelWithCurrentXposition)
                     text("Hello!")
                     if (alignLabelWithCurrentXposition) unindent(treeNodeToLabelSpacing)
@@ -440,49 +471,48 @@ interface imgui_demoDebugInfo {
                             "for text wrapping follows simple rules suitable for English and possibly other languages.")
                     spacing()
 
-//                    static float wrap_width = 200.0f
-//                    ImGui::SliderFloat("Wrap width", & wrap_width, -20, 600, "%.0f")
-//                    +
-//                    ImGui::Text("Test paragraph 1:")
-//                    ImVec2 pos = ImGui ::GetCursorScreenPos()
-//                    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(pos.x+wrap_width, pos.y), ImVec2(pos.x+wrap_width+10, pos.y+ImGui::GetTextLineHeight()), IM_COL32(255, 0, 255, 255))
-//                    ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + wrap_width)
-//                    ImGui::Text("The lazy dog is a good dog. This paragraph is made to fit within %.0f pixels. Testing a 1 character word. The quick brown fox jumps over the lazy dog.", wrap_width)
-//                    ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 255, 0, 255))
-//                    ImGui::PopTextWrapPos()
-//                    +
-//                    ImGui::Text("Test paragraph 2:")
-//                    pos = ImGui::GetCursorScreenPos()
-//                    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(pos.x+wrap_width, pos.y), ImVec2(pos.x+wrap_width+10, pos.y+ImGui::GetTextLineHeight()), IM_COL32(255, 0, 255, 255))
-//                    ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + wrap_width)
-//                    ImGui::Text("aaaaaaaa bbbbbbbb, c cccccccc,dddddddd. d eeeeeeee   ffffffff. gggggggg!hhhhhhhh")
-//                    ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 255, 0, 255))
-//                    ImGui::PopTextWrapPos()
+                    sliderFloat("Wrap width", ::wrapWidth, -20f, 600f, "%.0f")
+
+                    text("Test paragraph 1:")
+                    val pos = cursorScreenPos
+                    val a = Vec2(pos.x + wrapWidth, pos.y)
+                    val b = Vec2(pos.x + wrapWidth + 10, pos.y + textLineHeight)
+                    windowDrawList.addRectFilled(a, b, COL32(255, 0, 255, 255))
+                    pushTextWrapPos(cursorPos.x + wrapWidth)
+                    text("The lazy dog is a good dog. This paragraph is made to fit within %.0f pixels. Testing a 1 character word. The quick brown fox jumps over the lazy dog.", wrapWidth)
+                    windowDrawList.addRect(itemRectMin, itemRectMax, COL32(255, 255, 0, 255))
+                    popTextWrapPos()
+
+                    text("Test paragraph 2:")
+                    pos put cursorScreenPos
+                    a.put(pos.x + wrapWidth, pos.y)
+                    b.put(pos.x + wrapWidth + 10, pos.y + textLineHeight)
+                    windowDrawList.addRectFilled(a, b, COL32(255, 0, 255, 255))
+                    pushTextWrapPos(cursorPos.x + wrapWidth)
+                    text("aaaaaaaa bbbbbbbb, c cccccccc,dddddddd. d eeeeeeee   ffffffff. gggggggg!hhhhhhhh")
+                    windowDrawList.addRect(itemRectMin, itemRectMax, COL32(255, 255, 0, 255))
+                    popTextWrapPos()
+                }
+                treeNode("UTF-8 Text (jvm Unicode with surrogate characters") {
+                    /*  UTF-8 test with Japanese characters
+                        (needs a suitable font, try Arial Unicode or M+ fonts http://mplus-fonts.sourceforge.jp/mplus-outline-fonts/index-en.html)
+                        - From C++11 you can use the u8"my text" syntax to encode literal strings as UTF-8
+                        - For earlier compiler, you may be able to encode your sources as UTF-8 (e.g. Visual Studio save your file
+                            as 'UTF-8 without signature')
+                        - HOWEVER, FOR THIS DEMO FILE, BECAUSE WE WANT TO SUPPORT COMPILER, WE ARE *NOT* INCLUDING RAW UTF-8 CHARACTERS
+                            IN THIS SOURCE FILE.
+                        Instead we are encoding a few string with hexadecimal constants. Don't do this in your application!
+                        Note that characters values are preserved even by inputText() if the font cannot be displayed,
+                        so you can safely copy & paste garbled characters into another application. */
+                    textWrapped("CJK text will only appears if the font was loaded with the appropriate CJK character ranges. Call io.Font->LoadFromFileTTF() manually to load extra character ranges.")
+                    text("Hiragana: \u00e3\u0081\u008b\u00e3\u0081\u008d\u00e3\u0081\u008f\u00e3\u0081\u0091\u00e3\u0081\u0093 (kakikukeko)")
+                    text("Kanjis: \u00e6\u0097\u00a5\u00e6\u009c\u00ac\u00e8\u00aa\u009e (nihongo)")
+                    inputText("UTF-8 input", buf, buf.size)
                 }
             }
 
-            treeNode("UTF-8 Text TODO") {
-                /*  UTF-8 test with Japanese characters
-                    (needs a suitable font, try Arial Unicode or M+ fonts
-                    http://mplus-fonts.sourceforge.jp/mplus-outline-fonts/index-en.html)
-                    Most compiler appears to support UTF-8 in source code (with Visual Studio you need to save your file as
-                    'UTF-8 without signature')
-                    However for the sake for maximum portability here we are *not* including raw UTF-8 character in this source file,
-                    instead we encode the string with hexadecimal constants.
-                    In your own application be reasonable and use UTF-8 in source or retrieve the data from file system!
-                    Note that characters values are preserved even if the font cannot be displayed, so you can safely copy & paste
-                    garbled characters into another application.    */
-                textWrapped("CJK text will only appears if the font was loaded with the appropriate CJK character ranges. " +
-                        "Call io.Font->LoadFromFileTTF() manually to load extra character ranges.")
-//    TODO            text("Hiragana: \u00e3\u0081\u008b\u00e3\u0081\u008d\u00e3\u0081\u008f\u00e3\u0081\u0091\u00e3\u0081\u0093 (kakikukeko)")
-//                text("Kanjis: \u00e6\u0097\u00a5\u00e6\u009c\u00ac\u00e8\u00aa\u009e (nihongo)")
-//                inputText("UTF-8 input", buf, buf.size)
-            }
-
             treeNode("Images") {
-                textWrapped("Below we are displaying the font texture (which is the only texture we have access to in this " +
-                        "demo). Use the 'ImTextureID' type as storage to pass pointers or identifier to your own texture data. Hover " +
-                        "the texture for a zoomed view!")
+                textWrapped("Below we are displaying the font texture (which is the only texture we have access to in this demo). Use the 'ImTextureID' type as storage to pass pointers or identifier to your own texture data. Hover the texture for a zoomed view!")
                 val texScreenPos = Vec2(cursorScreenPos)
                 val texSize = Vec2(IO.fonts.texSize)
                 val texId = IO.fonts.texId
@@ -510,8 +540,8 @@ interface imgui_demoDebugInfo {
                 text("Pressed $pressedCount times.")
             }
 
-            var offset = 0
             treeNode("Selectables") {
+                var offset = 0
                 treeNode("Basic") {
                     selectable("1. I am selectable", selected, 0)
                     selectable("2. I am selectable", selected, 1)
@@ -523,9 +553,9 @@ interface imgui_demoDebugInfo {
                 }
                 offset += 4
                 treeNode("Rendering more text into the same block") {
-                    selectable("main.c", selected, offset + 0); sameLine(300f); text(" 2,345 bytes")
-                    selectable("Hello.cpp", selected, offset + 1); sameLine(300f); text("12,345 bytes")
-                    selectable("Hello.h", selected, offset + 2); sameLine(300f); text(" 2,345 bytes")
+                    selectable("main.c", selected, offset + 0); sameLine(300); text(" 2,345 bytes")
+                    selectable("Hello.cpp", selected, offset + 1); sameLine(300); text("12,345 bytes")
+                    selectable("Hello.h", selected, offset + 2); sameLine(300); text(" 2,345 bytes")
                 }
                 offset += 3
                 treeNode("In columns") {
@@ -556,9 +586,9 @@ interface imgui_demoDebugInfo {
             }
 
             treeNode("Filtered Text Input TODO") {
-                //                static char buf1[64] = ""; ImGui::InputText("default", buf1, 64);
-//                static char buf2[64] = ""; ImGui::InputText("decimal", buf2, 64, ImGuiInputTextFlags_CharsDecimal);
-//                static char buf3[64] = ""; ImGui::InputText("hexadecimal", buf3, 64, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_CharsUppercase);
+                //                inputText("default", buf1)
+//                inputText("decimal", buf2, Itf.CharsDecimal.i)
+//                inputText("hexadecimal", buf3, Itf.CharsHexadecimal or Itf.CharsUppercase)
 //                static char buf4[64] = ""; ImGui::InputText("uppercase", buf4, 64, ImGuiInputTextFlags_CharsUppercase);
 //                static char buf5[64] = ""; ImGui::InputText("no blank", buf5, 64, ImGuiInputTextFlags_CharsNoBlank);
 //                struct TextFilters { static int FilterImGuiLetters(ImGuiTextEditCallbackData* data) { if (data->EventChar < 256 && strchr("imgui", (char)data->EventChar)) return 0; return 1; } };
@@ -578,632 +608,559 @@ interface imgui_demoDebugInfo {
                 val flags = Itf.AllowTabInput or if (readOnly) Itf.ReadOnly else Itf.Null
 //                inputTextMultiline("##source", textMultiline, Vec2(-1f, textLineHeight * 16), flags)
             }
-//
-//            if (ImGui::TreeNode("Plots widgets"))
-//            {
-//                static bool animate = true;
-//                ImGui::Checkbox("Animate", &animate);
-//
-//                static float arr[] = { 0.6f, 0.1f, 1.0f, 0.5f, 0.92f, 0.1f, 0.2f };
-//                ImGui::PlotLines("Frame Times", arr, IM_ARRAYSIZE(arr));
-//
-//                // Create a dummy array of contiguous float values to plot
-//                // Tip: If your float aren't contiguous but part of a structure, you can pass a pointer to your first float and the sizeof() of your structure in the Stride parameter.
-//                static float values[90] = { 0 };
-//                static int values_offset = 0;
-//                static float refresh_time = 0.0f;
-//                if (!animate || refresh_time == 0.0f)
-//                        refresh_time = ImGui::GetTime();
-//                while (refresh_time < ImGui::GetTime()) // Create dummy data at fixed 60 hz rate for the demo
-//                    {
-//                            static float phase = 0.0f;
-//                            values[values_offset] = cosf(phase);
-//                            values_offset = (values_offset+1) % IM_ARRAYSIZE(values);
-//                            phase += 0.10f*values_offset;
-//                            refresh_time += 1.0f/60.0f;
-//                        }
-//                ImGui::PlotLines("Lines", values, IM_ARRAYSIZE(values), values_offset, "avg 0.0", -1.0f, 1.0f, ImVec2(0,80));
-//                ImGui::PlotHistogram("Histogram", arr, IM_ARRAYSIZE(arr), 0, NULL, 0.0f, 1.0f, ImVec2(0,80));
-//
-//                // Use functions to generate output
-//                // FIXME: This is rather awkward because current plot API only pass in indices. We probably want an API passing floats and user provide sample rate/count.
-//                struct Funcs
-//                        {
-//                                static float Sin(void*, int i) { return sinf(i * 0.1f); }
-//                                static float Saw(void*, int i) { return (i & 1) ? 1.0f : -1.0f; }
-//                            };
-//                static int func_type = 0, display_count = 70;
-//                ImGui::Separator();
-//                ImGui::PushItemWidth(100); ImGui::Combo("func", &func_type, "Sin\0Saw\0"); ImGui::PopItemWidth();
-//                ImGui::SameLine();
-//                ImGui::SliderInt("Sample count", &display_count, 1, 400);
-//                float (*func)(void*, int) = (func_type == 0) ? Funcs::Sin : Funcs::Saw;
-//                ImGui::PlotLines("Lines", func, NULL, display_count, 0, NULL, -1.0f, 1.0f, ImVec2(0,80));
-//                ImGui::PlotHistogram("Histogram", func, NULL, display_count, 0, NULL, -1.0f, 1.0f, ImVec2(0,80));
-//                ImGui::Separator();
-//
-//                // Animate a simple progress bar
-//                static float progress = 0.0f, progress_dir = 1.0f;
-//                if (animate)
-//                    {
-//                            progress += progress_dir * 0.4f * ImGui::GetIO().DeltaTime;
-//                            if (progress >= +1.1f) { progress = +1.1f; progress_dir *= -1.0f; }
-//                            if (progress <= -0.1f) { progress = -0.1f; progress_dir *= -1.0f; }
-//                        }
-//
-//                // Typically we would use ImVec2(-1.0f,0.0f) to use all available width, or ImVec2(width,0.0f) for a specified width. ImVec2(0.0f,0.0f) uses ItemWidth.
-//                ImGui::ProgressBar(progress, ImVec2(0.0f,0.0f));
-//                ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-//                ImGui::Text("Progress Bar");
-//
-//                float progress_saturated = (progress < 0.0f) ? 0.0f : (progress > 1.0f) ? 1.0f : progress;
-//                char buf[32];
-//                sprintf(buf, "%d/%d", (int)(progress_saturated*1753), 1753);
-//                ImGui::ProgressBar(progress, ImVec2(0.f,0.f), buf);
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Color/Picker Widgets"))
-//            {
-//                static ImVec4 color = ImColor(114, 144, 154, 200);
-//
-//                static bool hdr = false;
-//                static bool alpha_preview = true;
-//                static bool alpha_half_preview = false;
-//                static bool options_menu = true;
-//                ImGui::Checkbox("With HDR", &hdr); ImGui::SameLine(); ShowHelpMarker("Currently all this does is to lift the 0..1 limits on dragging widgets.");
-//                ImGui::Checkbox("With Alpha Preview", &alpha_preview);
-//                ImGui::Checkbox("With Half Alpha Preview", &alpha_half_preview);
-//                ImGui::Checkbox("With Options Menu", &options_menu); ImGui::SameLine(); ShowHelpMarker("Right-click on the individual color widget to show options.");
-//                int misc_flags = (hdr ? ImGuiColorEditFlags_HDR : 0) | (alpha_half_preview ? ImGuiColorEditFlags_AlphaPreviewHalf : (alpha_preview ? ImGuiColorEditFlags_AlphaPreview : 0)) | (options_menu ? 0 : ImGuiColorEditFlags_NoOptions);
-//
-//                ImGui::Text("Color widget:");
-//                ImGui::SameLine(); ShowHelpMarker("Click on the colored square to open a color picker.\nCTRL+click on individual component to input value.\n");
-//                ImGui::ColorEdit3("MyColor##1", (float*)&color, misc_flags);
-//
-//                ImGui::Text("Color widget HSV with Alpha:");
-//                ImGui::ColorEdit4("MyColor##2", (float*)&color, ImGuiColorEditFlags_HSV | misc_flags);
-//
-//                ImGui::Text("Color widget with Float Display:");
-//                ImGui::ColorEdit4("MyColor##2f", (float*)&color, ImGuiColorEditFlags_Float | misc_flags);
-//
-//                ImGui::Text("Color button with Picker:");
-//                ImGui::SameLine(); ShowHelpMarker("With the ImGuiColorEditFlags_NoInputs flag you can hide all the slider/text inputs.\nWith the ImGuiColorEditFlags_NoLabel flag you can pass a non-empty label which will only be used for the tooltip and picker popup.");
-//                ImGui::ColorEdit4("MyColor##3", (float*)&color, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | misc_flags);
-//
-//                ImGui::Text("Color button with Custom Picker Popup:");
-//                static bool saved_palette_inited = false;
-//                static ImVec4 saved_palette[32];
-//                static ImVec4 backup_color;
-//                if (!saved_palette_inited)
-//                        for (int n = 0; n < IM_ARRAYSIZE(saved_palette); n++)
-//                        ImGui::ColorConvertHSVtoRGB(n / 31.0f, 0.8f, 0.8f, saved_palette[n].x, saved_palette[n].y, saved_palette[n].z);
-//                bool open_popup = ImGui::ColorButton("MyColor##3b", color, misc_flags);
-//                ImGui::SameLine();
-//                open_popup |= ImGui::Button("Palette");
-//                if (open_popup)
-//                    {
-//                            ImGui::OpenPopup("mypicker");
-//                            backup_color = color;
-//                        }
-//                if (ImGui::BeginPopup("mypicker"))
-//                    {
-//                            // FIXME: Adding a drag and drop example here would be perfect!
-//                            ImGui::Text("MY CUSTOM COLOR PICKER WITH AN AMAZING PALETTE!");
-//                            ImGui::Separator();
-//                            ImGui::ColorPicker4("##picker", (float*)&color, misc_flags | ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview);
-//                            ImGui::SameLine();
-//                            ImGui::BeginGroup();
-//                            ImGui::Text("Current");
-//                            ImGui::ColorButton("##current", color, ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(60,40));
-//                            ImGui::Text("Previous");
-//                            if (ImGui::ColorButton("##previous", backup_color, ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(60,40)))
-//                                color = backup_color;
-//                            ImGui::Separator();
-//                            ImGui::Text("Palette");
-//                            for (int n = 0; n < IM_ARRAYSIZE(saved_palette); n++)
-//                            {
-//                                    ImGui::PushID(n);
-//                                    if ((n % 8) != 0)
-//                                            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.y);
-//                                    if (ImGui::ColorButton("##palette", saved_palette[n], ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoTooltip, ImVec2(20,20)))
-//                                        color = ImVec4(saved_palette[n].x, saved_palette[n].y, saved_palette[n].z, color.w); // Preserve alpha!
-//                                    ImGui::PopID();
-//                                }
-//                            ImGui::EndGroup();
-//                            ImGui::EndPopup();
-//                        }
-//
-//                        ImGui::Text("Color button only:");
-//                        ImGui::ColorButton("MyColor##3c", *(ImVec4*)&color, misc_flags, ImVec2(80,80));
-//                        +
-//                        ImGui::Text("Color picker:");
-//                        static bool alpha = true;
-//                        static bool alpha_bar = true;
-//                        static bool side_preview = true;
-//                        static bool ref_color = false;
-//                        static ImVec4 ref_color_v(1.0f,0.0f,1.0f,0.5f);
-//                        static int inputs_mode = 2;
-//                        static int picker_mode = 0;
-//                        ImGui::Checkbox("With Alpha", &alpha);
-//                        ImGui::Checkbox("With Alpha Bar", &alpha_bar);
-//                        ImGui::Checkbox("With Side Preview", &side_preview);
-//                        if (side_preview)
-//                            {
-//                                    ImGui::SameLine();
-//                                    ImGui::Checkbox("With Ref Color", &ref_color);
-//                                    if (ref_color)
-//                                        {
-//                                                ImGui::SameLine();
-//                                                ImGui::ColorEdit4("##RefColor", &ref_color_v.x, ImGuiColorEditFlags_NoInputs | misc_flags);
-//                                            }
-//                                }
-//                        ImGui::Combo("Inputs Mode", &inputs_mode, "All Inputs\0No Inputs\0RGB Input\0HSV Input\0HEX Input\0");
-//                        ImGui::Combo("Picker Mode", &picker_mode, "Auto/Current\0Hue bar + SV rect\0Hue wheel + SV triangle\0");
-//                        ImGui::SameLine(); ShowHelpMarker("User can right-click the picker to change mode.");
-//                        ImGuiColorEditFlags flags = misc_flags;
-//                        if (!alpha) flags |= ImGuiColorEditFlags_NoAlpha; // This is by default if you call ColorPicker3() instead of ColorPicker4()
-//                        if (alpha_bar) flags |= ImGuiColorEditFlags_AlphaBar;
-//                        if (!side_preview) flags |= ImGuiColorEditFlags_NoSidePreview;
-//                        if (picker_mode == 1) flags |= ImGuiColorEditFlags_PickerHueBar;
-//                        if (picker_mode == 2) flags |= ImGuiColorEditFlags_PickerHueWheel;
-//                        if (inputs_mode == 1) flags |= ImGuiColorEditFlags_NoInputs;
-//                        if (inputs_mode == 2) flags |= ImGuiColorEditFlags_RGB;
-//                        if (inputs_mode == 3) flags |= ImGuiColorEditFlags_HSV;
-//                        if (inputs_mode == 4) flags |= ImGuiColorEditFlags_HEX;
-//                        ImGui::ColorPicker4("MyColor##4", (float*)&color, flags, ref_color ? &ref_color_v.x : NULL);
-//                        +
-//                        ImGui::Text("Programmatically set defaults/options:");
-//                        ImGui::SameLine(); ShowHelpMarker("SetColorEditOptions() is designed to allow you to set boot-time default.\nWe don't have Push/Pop functions because you can force options on a per-widget basis if needed, and the user can change non-forced ones with the options menu.\nWe don't have a getter to avoid encouraging you to persistently save values that aren't forward-compatible.");
-//                        if (ImGui::Button("Uint8 + HSV"))
-//                                ImGui::SetColorEditOptions(ImGuiColorEditFlags_Uint8 | ImGuiColorEditFlags_HSV);
-//                        ImGui::SameLine();
-//                        if (ImGui::Button("Float + HDR"))
-//                                ImGui::SetColorEditOptions(ImGuiColorEditFlags_Float | ImGuiColorEditFlags_RGB);
-//
-//                        ImGui::TreePop();
-//                    }
-//
-//            if (ImGui::TreeNode("Range Widgets"))
-//            {
-//                static float begin = 10, end = 90;
-//                static int begin_i = 100, end_i = 1000;
-//                ImGui::DragFloatRange2("range", &begin, &end, 0.25f, 0.0f, 100.0f, "Min: %.1f %%", "Max: %.1f %%");
-//                ImGui::DragIntRange2("range int (no bounds)", &begin_i, &end_i, 5, 0, 0, "Min: %.0f units", "Max: %.0f units");
-//
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Multi-component Widgets"))
-//            {
-//                static float vec4f[4] = { 0.10f, 0.20f, 0.30f, 0.44f };
-//                static int vec4i[4] = { 1, 5, 100, 255 };
-//
-//                ImGui::InputFloat2("input float2", vec4f);
-//                ImGui::DragFloat2("drag float2", vec4f, 0.01f, 0.0f, 1.0f);
-//                ImGui::SliderFloat2("slider float2", vec4f, 0.0f, 1.0f);
-//                ImGui::DragInt2("drag int2", vec4i, 1, 0, 255);
-//                ImGui::InputInt2("input int2", vec4i);
-//                ImGui::SliderInt2("slider int2", vec4i, 0, 255);
-//                ImGui::Spacing();
-//
-//                ImGui::InputFloat3("input float3", vec4f);
-//                ImGui::DragFloat3("drag float3", vec4f, 0.01f, 0.0f, 1.0f);
-//                ImGui::SliderFloat3("slider float3", vec4f, 0.0f, 1.0f);
-//                ImGui::DragInt3("drag int3", vec4i, 1, 0, 255);
-//                ImGui::InputInt3("input int3", vec4i);
-//                ImGui::SliderInt3("slider int3", vec4i, 0, 255);
-//                ImGui::Spacing();
-//
-//                ImGui::InputFloat4("input float4", vec4f);
-//                ImGui::DragFloat4("drag float4", vec4f, 0.01f, 0.0f, 1.0f);
-//                ImGui::SliderFloat4("slider float4", vec4f, 0.0f, 1.0f);
-//                ImGui::InputInt4("input int4", vec4i);
-//                ImGui::DragInt4("drag int4", vec4i, 1, 0, 255);
-//                ImGui::SliderInt4("slider int4", vec4i, 0, 255);
-//
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Vertical Sliders"))
-//            {
-//                const float spacing = 4;
-//                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
-//
-//                static int int_value = 0;
-//                ImGui::VSliderInt("##int", ImVec2(18,160), &int_value, 0, 5);
-//                ImGui::SameLine();
-//
-//                static float values[7] = { 0.0f, 0.60f, 0.35f, 0.9f, 0.70f, 0.20f, 0.0f };
-//                ImGui::PushID("set1");
-//                for (int i = 0; i < 7; i++)
-//                {
-//                    if (i > 0) ImGui::SameLine();
-//                    ImGui::PushID(i);
-//                    ImGui::PushStyleColor(ImGuiCol_FrameBg, (ImVec4)ImColor::HSV(i/7.0f, 0.5f, 0.5f));
-//                    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, (ImVec4)ImColor::HSV(i/7.0f, 0.6f, 0.5f));
-//                    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, (ImVec4)ImColor::HSV(i/7.0f, 0.7f, 0.5f));
-//                    ImGui::PushStyleColor(ImGuiCol_SliderGrab, (ImVec4)ImColor::HSV(i/7.0f, 0.9f, 0.9f));
-//                    ImGui::VSliderFloat("##v", ImVec2(18,160), &values[i], 0.0f, 1.0f, "");
-//                    if (ImGui::IsItemActive() || ImGui::IsItemHovered())
-//                        ImGui::SetTooltip("%.3f", values[i]);
-//                    ImGui::PopStyleColor(4);
-//                    ImGui::PopID();
-//                }
-//                ImGui::PopID();
-//
-//                ImGui::SameLine();
-//                ImGui::PushID("set2");
-//                static float values2[4] = { 0.20f, 0.80f, 0.40f, 0.25f };
-//                const int rows = 3;
-//                const ImVec2 small_slider_size(18, (160.0f-(rows-1)*spacing)/rows);
-//                for (int nx = 0; nx < 4; nx++)
-//                {
-//                    if (nx > 0) ImGui::SameLine();
-//                    ImGui::BeginGroup();
-//                    for (int ny = 0; ny < rows; ny++)
-//                    {
-//                        ImGui::PushID(nx*rows+ny);
-//                        ImGui::VSliderFloat("##v", small_slider_size, &values2[nx], 0.0f, 1.0f, "");
-//                        if (ImGui::IsItemActive() || ImGui::IsItemHovered())
-//                            ImGui::SetTooltip("%.3f", values2[nx]);
-//                        ImGui::PopID();
-//                    }
-//                    ImGui::EndGroup();
-//                }
-//                ImGui::PopID();
-//
-//                ImGui::SameLine();
-//                ImGui::PushID("set3");
-//                for (int i = 0; i < 4; i++)
-//                {
-//                    if (i > 0) ImGui::SameLine();
-//                    ImGui::PushID(i);
-//                    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, 40);
-//                    ImGui::VSliderFloat("##v", ImVec2(40,160), &values[i], 0.0f, 1.0f, "%.2f\nsec");
-//                    ImGui::PopStyleVar();
-//                    ImGui::PopID();
-//                }
-//                ImGui::PopID();
-//                ImGui::PopStyleVar();
-//
-//                ImGui::TreePop();
-//            }
+
+            treeNode("Plots widgets") {
+
+                checkbox("Animate", ::animate)
+
+                val arr = floatArrayOf(0.6f, 0.1f, 1f, 0.5f, 0.92f, 0.1f, 0.2f)
+                plotLines("Frame Times", arr)
+
+                /*  Create a dummy array of contiguous float values to plot
+                    Tip: If your float aren't contiguous but part of a structure, you can pass a pointer to your first float
+                    and the sizeof() of your structure in the Stride parameter.
+                 */
+                if (!animate || refreshTime == 0f) refreshTime = time
+                while (refreshTime < time) { // Create dummy data at fixed 60 hz rate for the demo
+                    values[valuesOffset] = cos(phase)
+                    valuesOffset = (valuesOffset + 1) % values.size
+                    phase += 0.1f * valuesOffset
+                    refreshTime += 1f / 60f
+                }
+                plotLines("Lines", values, valuesOffset, "avg 0.0", -1f, 1f, Vec2(0, 80))
+                plotHistogram("Histogram", arr, 0, "", 0f, 1f, Vec2(0, 80))
+
+                // Use functions to generate output
+                // FIXME: This is rather awkward because current plot API only pass in indices. We probably want an API passing floats and user provide sample rate/count.
+                separator()
+                pushItemWidth(100); combo("func", ::funcType, "Sin\u0000Saw\u0000"); popItemWidth()
+                sameLine()
+                sliderInt("Sample count", ::displayCount, 1, 400)
+                val func = if (funcType == 0) Companion.Funcs1::sin else Companion.Funcs1::saw
+                plotLines("Lines", func, displayCount, 0, "", -1f, 1f, Vec2(0, 80))
+                plotHistogram("Histogram", func, displayCount, 0, "", -1f, 1f, Vec2(0, 80))
+                separator()
+
+                // Animate a simple progress bar
+                if (animate) {
+                    progress += progressDir * 0.4f * IO.deltaTime
+                    if (progress >= 1.1f) {
+                        progress = +1.1f
+                        progressDir *= -1f
+                    }
+                    if (progress <= -0.1f) {
+                        progress = -0.1f
+                        progressDir *= -1f
+                    }
+                }
+                /*  Typically we would use Vec2(-1f , 0f) to use all available width, or Vec2(width, 0f) for a specified width.
+                    Vec2() uses itemWidth.  */
+                progressBar(progress, Vec2())
+                sameLine(0f, style.itemInnerSpacing.x)
+                text("Progress Bar")
+
+                val progressSaturated = glm.clamp(progress, 0f, 1f)
+                progressBar(progress, Vec2(), "${(progressSaturated * 1753).i}/1753")
+            }
+
+            treeNode("Color/Picker Widgets") {
+
+                checkbox("With HDR", ::hdr); sameLine(); showHelpMarker("Currently all this does is to lift the 0..1 limits on dragging widgets.")
+                checkbox("With Alpha Preview", ::alphaPreview)
+                checkbox("With Half Alpha Preview", ::alphaHalfPreview)
+                checkbox("With Options Menu", ::optionsMenu); sameLine(); showHelpMarker("Right-click on the individual color widget to show options.")
+                var miscFlags = if (hdr) Cef.HDR.i else 0
+                if (alphaHalfPreview) miscFlags = miscFlags or Cef.AlphaPreviewHalf
+                if (alphaPreview) miscFlags = miscFlags or Cef.AlphaPreview
+                if (!optionsMenu) miscFlags = miscFlags or Cef.NoOptions
+
+                text("Color widget:")
+                sameLine(); showHelpMarker("Click on the colored square to open a color picker.\nCTRL+click on individual component to input value.\n")
+                colorEdit3("MyColor##1", color, miscFlags)
+
+                text("Color widget HSV with Alpha:")
+                colorEdit4("MyColor##2", color, Cef.HSV or miscFlags)
+
+                text("Color widget with Float Display:")
+                colorEdit4("MyColor##2f", color, Cef.Float or miscFlags)
+
+                text("Color button with Picker:")
+                sameLine(); showHelpMarker("With the ImGuiColorEditFlags_NoInputs flag you can hide all the slider/text inputs.\nWith the ImGuiColorEditFlags_NoLabel flag you can pass a non-empty label which will only be used for the tooltip and picker popup.")
+                colorEdit4("MyColor##3", color, Cef.NoInputs or Cef.NoLabel or miscFlags)
+
+                text("Color button with Custom Picker Popup:")
+                if (!savedPaletteInited)
+                    savedPalette.forEachIndexed { n, c -> colorConvertHSVtoRGB(n / 31f, 0.8f, 0.8f, c::x, c::y, c::z) }
+                var openPopup = colorButton("MyColor##3b", color, miscFlags)
+                sameLine()
+                openPopup = openPopup or button("Palette")
+                if (openPopup) {
+                    openPopup("mypicker")
+                    backupColor put color
+                }
+                popup("mypicker") {
+                    // FIXME: Adding a drag and drop example here would be perfect!
+                    text("MY CUSTOM COLOR PICKER WITH AN AMAZING PALETTE!")
+                    separator()
+                    colorPicker4("##picker", color, miscFlags or Cef.NoSidePreview or Cef.NoSmallPreview)
+                    sameLine()
+                    withGroup {
+                        text("Current")
+                        colorButton("##current", color, Cef.NoPicker or Cef.AlphaPreviewHalf, Vec2(60, 40))
+                        text("Previous")
+                        if (colorButton("##previous", backupColor, Cef.NoPicker or Cef.AlphaPreviewHalf, Vec2(60, 40)))
+                            color put backupColor
+                        separator()
+                        text("Palette")
+                        savedPalette.forEachIndexed { n, c ->
+                            pushId(n)
+                            if ((n % 8) != 0)
+                                sameLine(0f, style.itemSpacing.y)
+                            if (colorButton("##palette", c, Cef.NoPicker or Cef.NoTooltip, Vec2(20, 20)))
+                                color.put(c.x, c.y, c.z, color.w) // Preserve alpha!
+                            popId()
+                        }
+                    }
+                }
+                text("Color button only:")
+                colorButton("MyColor##3c", color, miscFlags, Vec2(80, 80))
+
+                text("Color picker:")
+                checkbox("With Alpha", ::alpha)
+                checkbox("With Alpha Bar", ::alphaBar)
+                checkbox("With Side Preview", ::sidePreview)
+                if (sidePreview) {
+                    sameLine()
+                    checkbox("With Ref Color", ::refColor)
+                    if (refColor) {
+                        sameLine()
+                        colorEdit4("##RefColor", refColorV, Cef.NoInputs or miscFlags)
+                    }
+                }
+                combo("Inputs Mode", ::inputsMode, "All Inputs\u0000No Inputs\u0000RGB Input\u0000HSV Input\u0000HEX Input\u0000")
+                combo("Picker Mode", ::pickerMode, "Auto/Current\u0000Hue bar + SV rect\u0000Hue wheel + SV triangle\u0000")
+                sameLine(); showHelpMarker("User can right-click the picker to change mode.")
+                var flags = miscFlags
+                if (!alpha) flags = flags or Cef.NoAlpha // This is by default if you call ColorPicker3() instead of ColorPicker4()
+                if (alphaBar) flags = flags or Cef.AlphaBar
+                if (!sidePreview) flags = flags or Cef.NoSidePreview
+                flags = flags or when (pickerMode) {
+                    1 -> Cef.PickerHueBar
+                    2 -> Cef.PickerHueWheel
+                    else -> Cef.Null
+                }
+                flags = flags or when (inputsMode) {
+                    1 -> Cef.NoInputs
+                    2 -> Cef.RGB
+                    3 -> Cef.HSV
+                    4 -> Cef.HEX
+                    else -> Cef.Null
+                }
+                colorPicker4("MyColor##4", color, flags, refColorV.takeIf { refColor })
+
+                text("Programmatically set defaults/options:")
+                sameLine(); showHelpMarker("SetColorEditOptions() is designed to allow you to set boot-time default.\nWe don't have Push/Pop functions because you can force options on a per-widget basis if needed, and the user can change non-forced ones with the options menu.\nWe don't have a getter to avoid encouraging you to persistently save values that aren't forward-compatible.")
+                button("Uint8 + HSV") { setColorEditOptions(Cef.Uint8 or Cef.HSV) }
+                sameLine()
+                button("Float + HDR") { setColorEditOptions(Cef.Float or Cef.RGB) }
+            }
+
+            treeNode("Range Widgets") {
+                dragFloatRange2("range", ::begin, ::end, 0.25f, 0f, 100f, "Min: %.1f %%", "Max: %.1f %%")
+                dragIntRange2("range int (no bounds)", ::beginI, ::endI, 5f, 0, 0, "Min: %.0f units", "Max: %.0f units")
+            }
+
+            treeNode("Multi-component Widgets") {
+
+                inputFloat2("input float2", vec4f)
+                dragFloat2("drag float2", vec4f, 0.01f, 0f, 1f)
+                sliderFloat2("slider float2", vec4f, 0f, 1f)
+                dragInt2("drag int2", vec4i, 1f, 0, 255)
+                inputInt2("input int2", vec4i)
+                sliderInt2("slider int2", vec4i, 0, 255)
+                spacing()
+
+                inputFloat3("input float3", vec4f)
+                dragFloat3("drag float3", vec4f, 0.01f, 0.0f, 1.0f)
+                sliderFloat3("slider float3", vec4f, 0.0f, 1.0f)
+                dragInt3("drag int3", vec4i, 1f, 0, 255)
+                inputInt3("input int3", vec4i)
+                sliderInt3("slider int3", vec4i, 0, 255)
+                spacing()
+
+                inputFloat4("input float4", vec4f)
+                dragFloat4("drag float4", vec4f, 0.01f, 0.0f, 1.0f)
+                sliderFloat4("slider float4", vec4f, 0.0f, 1.0f)
+                inputInt4("input int4", vec4i)
+                dragInt4("drag int4", vec4i, 1f, 0, 255)
+                sliderInt4("slider int4", vec4i, 0, 255)
+            }
+
+            treeNode("Vertical Sliders") {
+
+                pushStyleVar(StyleVar.ItemSpacing, Vec2(Vs.spacing))
+
+                vSliderInt("##int", Vec2(18, 160), Vs::intValue, 0, 5)
+                sameLine()
+
+                withId("set1") {
+                    for (i in 0..6) {
+                        if (i > 0) sameLine()
+                        withId(i) {
+                            pushStyleColor(Col.FrameBg, Color.hsv(i / 7f, 0.5f, 0.5f))
+                            pushStyleColor(Col.FrameBgHovered, Color.hsv(i / 7f, 0.6f, 0.5f))
+                            pushStyleColor(Col.FrameBgActive, Color.hsv(i / 7f, 0.7f, 0.5f))
+                            pushStyleColor(Col.SliderGrab, Color.hsv(i / 7f, 0.9f, 0.9f))
+                            withFloat { f ->
+                                f.set(Vs.values[i])
+                                vSliderFloat("##v", Vec2(18, 160), f, 0f, 1f, "")
+                                Vs.values[i] = f()
+                            }
+                            if (isItemActive || isItemHovered()) setTooltip("%.3f", Vs.values[i])
+                            popStyleColor(4)
+                        }
+                    }
+                }
+
+                sameLine()
+                withId("set2") {
+                    val rows = 3
+                    val smallSliderSize = Vec2(18, (160f - (rows - 1) * Vs.spacing) / rows)
+                    for (nx in 0..3) {
+                        if (nx > 0) sameLine()
+                        withGroup {
+                            for (ny in 0 until rows) {
+                                withId(nx * rows + ny) {
+                                    withFloat(Vs.values2, nx) { f ->
+                                        vSliderFloat("##v", smallSliderSize, f, 0f, 1f, "")
+                                    }
+                                    if (isItemActive || isItemHovered())
+                                        setTooltip("%.3f", Vs.values2[nx])
+                                }
+                            }
+                        }
+                    }
+                }
+
+                sameLine()
+                withId("set3") {
+                    for (i in 0..3) {
+                        if (i > 0) sameLine()
+                        withId(i) {
+                            withStyleVar(StyleVar.GrabMinSize, 40f) {
+                                withFloat(Vs.values, i) {
+                                    vSliderFloat("##v", Vec2(40, 160), it, 0f, 1f, "%.2f\nsec")
+                                }
+                            }
+                        }
+                    }
+                }
+                popStyleVar()
+            }
         }
 
         collapsingHeader("Layout") {
 
-            //            if (ImGui::TreeNode("Child regions"))
-//            {
-//                ImGui::Text("Without border");
-//                static int line = 50;
-//                bool goto_line = ImGui::Button("Goto");
-//                ImGui::SameLine();
-//                ImGui::PushItemWidth(100);
-//                goto_line |= ImGui::InputInt("##Line", &line, 0, 0, ImGuiInputTextFlags_EnterReturnsTrue);
-//                ImGui::PopItemWidth();
-//                ImGui::BeginChild("Sub1", ImVec2(ImGui::GetWindowContentRegionWidth() * 0.5f,300), false, ImGuiWindowFlags_HorizontalScrollbar);
-//                for (int i = 0; i < 100; i++)
-//                {
-//                    ImGui::Text("%04d: scrollable region", i);
-//                    if (goto_line && line == i)
-//                        ImGui::SetScrollHere();
+            treeNode("Child regions") {
+
+                var gotoLine = button("Goto")
+                text("Without border")
+                sameLine()
+                pushItemWidth(100)
+                gotoLine = gotoLine or inputInt("##Line", L::line, 0, 0, Itf.EnterReturnsTrue.i)
+                popItemWidth()
+                withChild("Sub1", Vec2(windowContentRegionWidth * 0.5f, 300), false, Wf.HorizontalScrollbar.i) {
+                    for (i in 0 until 100) {
+                        text("%04d: scrollable region", i)
+                        if (gotoLine && L.line == i) setScrollHere()
+                    }
+                    if (gotoLine && L.line >= 100) setScrollHere()
+                }
+
+                sameLine()
+
+                withStyleVar(StyleVar.ChildWindowRounding, 5f) {
+                    withChild("Sub2", Vec2(0, 300), true) {
+                        text("With border")
+                        columns(2)
+                        for (i in 0..99) {
+                            if (i == 50) nextColumn()
+                            val text = "%08x".format(style.locale, i * 5731)
+                            button(text, Vec2(-1f, 0f))
+                        }
+                    }
+                }
+            }
+
+            treeNode("Widgets Width") {
+
+                text("PushItemWidth(100)")
+                sameLine(); showHelpMarker("Fixed width.")
+                pushItemWidth(100)
+                dragFloat("float##1", L::f)
+                popItemWidth()
+
+                text("PushItemWidth(GetWindowWidth() * 0.5f)")
+                sameLine(); showHelpMarker("Half of window width.")
+                pushItemWidth(windowWidth * 0.5f)
+                dragFloat("float##2", L::f)
+                popItemWidth()
+
+                text("PushItemWidth(GetContentRegionAvailWidth() * 0.5f)")
+                sameLine(); showHelpMarker("Half of available width.\n(~ right-cursor_pos)\n(works within a column set)")
+                pushItemWidth(contentRegionAvailWidth * 0.5f)
+                dragFloat("float##3", L::f)
+                popItemWidth()
+
+                text("PushItemWidth(-100)")
+                sameLine(); showHelpMarker("Align to right edge minus 100")
+                pushItemWidth(-100)
+                dragFloat("float##4", L::f)
+                popItemWidth()
+
+                text("PushItemWidth(-1)")
+                sameLine(); showHelpMarker("Align to right edge")
+                pushItemWidth(-1)
+                dragFloat("float##5", L::f)
+                popItemWidth()
+            }
+
+            treeNode("Basic Horizontal Layout") {
+
+                textWrapped("(Use SameLine() to keep adding items to the right of the preceding item)")
+
+                // Text
+                text("Two items: Hello"); sameLine()
+                textColored(Vec4(1, 1, 0, 1), "Sailor")
+
+                // Adjust spacing
+                text("More spacing: Hello"); sameLine(0, 20)
+                textColored(Vec4(1, 1, 0, 1), "Sailor")
+
+                // Button
+                alignTextToFramePadding()
+                text("Normal buttons"); sameLine()
+                button("Banana"); sameLine()
+                button("Apple"); sameLine()
+                button("Corniflower")
+
+                // Button
+                text("Small buttons"); sameLine()
+                smallButton("Like this one"); sameLine()
+                text("can fit within a text block.")
+
+                // Aligned to arbitrary position. Easy/cheap column.
+                text("Aligned")
+                sameLine(150); text("x=150")
+                sameLine(300); text("x=300")
+                text("Aligned")
+                sameLine(150); smallButton("x=150")
+                sameLine(300); smallButton("x=300")
+
+                // Checkbox
+                checkbox("My", L::c1); sameLine()
+                checkbox("Tailor", L::c2); sameLine()
+                checkbox("Is", L::c3); sameLine()
+                checkbox("Rich", L::c4)
+
+                // Various
+                val items = arrayOf("AAAA", "BBBB", "CCCC", "DDDD")
+                withItemWidth(80f) {
+                    combo("Combo", L::item, items); sameLine()
+                    sliderFloat("X", L::f0, 0f, 5f); sameLine()
+                    sliderFloat("Y", L::f1, 0f, 5f); sameLine()
+                    sliderFloat("Z", L::f2, 0f, 5f)
+                }
+
+                withItemWidth(80f) {
+                    text("Lists:")
+                    for (i in 0..3) {
+                        if (i > 0) sameLine()
+                        withId(i) {
+                            withInt(L.selection, i) {
+                                listBox("", it, items)
+                            }
+                        }
+                        //if (IsItemHovered()) SetTooltip("ListBox %d hovered", i);
+                    }
+                }
+
+                // Dummy
+                val sz = Vec2(30)
+                button("A", sz); sameLine()
+                dummy(sz); sameLine()
+                button("B", sz)
+            }
+
+            treeNode("Groups") {
+
+                textWrapped("(Using BeginGroup()/EndGroup() to layout items. BeginGroup() basically locks the horizontal position. EndGroup() bundles the whole group so that you can use functions such as IsItemHovered() on it.)")
+                beginGroup()
+                withGroup {
+                    button("AAA")
+                    sameLine()
+                    button("BBB")
+                    sameLine()
+                    withGroup {
+                        button("CCC")
+                        button("DDD")
+                    }
+                    sameLine()
+                    button("EEE")
+                }
+                if (isItemHovered()) setTooltip("First group hovered")
+
+                // Capture the group size and create widgets using the same size
+                val size = Vec2(itemRectSize)
+                val values = floatArrayOf(0.5f, 0.2f, 0.8f, 0.6f, 0.25f)
+                plotHistogram("##values", values, 0, "", 0f, 1f, size)
+
+                button("ACTION", Vec2((size.x - style.itemSpacing.x) * 0.5f, size.y))
+                sameLine()
+                button("REACTION", Vec2((size.x - style.itemSpacing.x) * 0.5f, size.y))
+                endGroup()
+                sameLine()
+
+                button("LEVERAGE\nBUZZWORD", size)
+                sameLine()
+
+                listBoxHeader("List", size)
+                selectable("Selected", true)
+                selectable("Not Selected", false)
+                listBoxFooter()
+            }
+
+            treeNode("Text Baseline Alignment") {
+
+                textWrapped("(This is testing the vertical alignment that occurs on text to keep it at the same baseline as widgets. Lines only composed of text or \"small\" widgets fit in less vertical spaces than lines with normal widgets)")
+
+                text("One\nTwo\nThree"); sameLine()
+                text("Hello\nWorld"); sameLine()
+                text("Banana")
+
+                text("Banana"); sameLine()
+                text("Hello\nWorld"); sameLine()
+                text("One\nTwo\nThree")
+
+                button("HOP##1"); sameLine()
+                text("Banana"); sameLine()
+                text("Hello\nWorld"); sameLine()
+                text("Banana")
+
+                button("HOP##2"); sameLine()
+                text("Hello\nWorld"); sameLine()
+                text("Banana")
+
+                button("TEST##1"); sameLine()
+                text("TEST"); sameLine()
+                smallButton("TEST##2")
+
+                alignTextToFramePadding() // If your line starts with text, call this to align it to upcoming widgets.
+                text("Text aligned to Widget"); sameLine()
+                button("Widget##1"); sameLine()
+                text("Widget"); sameLine()
+                smallButton("Widget##2"); sameLine()
+                button("Widget##3")
+
+                // Tree
+                val spacing = style.itemInnerSpacing.x
+                button("Button##1")
+                sameLine(0f, spacing)
+                treeNode("Node##1") { for (i in 0..5) bulletText("Item $i..") } // Dummy tree data
+                /*  Vertically align text node a bit lower so it'll be vertically centered with upcoming widget.
+                    Otherwise you can use SmallButton (smaller fit).                 */
+                alignTextToFramePadding()
+                // Common mistake to avoid: if we want to SameLine after TreeNode we need to do it before we add child content.
+                val nodeOpen = treeNode("Node##2")
+                sameLine(0f, spacing); button("Button##2")
+                if (nodeOpen) { // Dummy tree data
+                    for (i in 0..5) bulletText("Item $i..")
+                    treePop()
+                }
+                // Bullet
+                button("Button##3")
+                sameLine(0f, spacing)
+                bulletText("Bullet text")
+
+                alignTextToFramePadding()
+                bulletText("Node")
+                sameLine(0f, spacing); button("Button##4")
+            }
+
+            treeNode("Scrolling") {
+
+                textWrapped("(Use SetScrollHere() or SetScrollFromPosY() to scroll to a given position.)")
+                checkbox("Track", S::track)
+                pushItemWidth(100)
+                sameLine(130); S.track = S.track or dragInt("##line", S::trackLine, 0.25f, 0, 99, "Line = %.0f")
+                var scrollTo = button("Scroll To Pos")
+                sameLine(130); scrollTo = scrollTo or dragInt("##pos_y", S::scrollToPx, 1f, 0, 9999, "Y = %.0f px")
+                popItemWidth()
+                if (scrollTo) S.track = false
+
+                for (i in 0..4) {
+                    if (i > 0) sameLine()
+                    withGroup {
+                        text("%s", if (i == 0) "Top" else if (i == 1) "25%" else if (i == 2) "Center" else if (i == 3) "75%" else "Bottom")
+                        beginChild(getId(i), Vec2(windowWidth * 0.17f, 200f), true)
+                        if (scrollTo)
+                            setScrollFromPosY(cursorStartPos.y + S.scrollToPx, i * 0.25f)
+                        for (line in 0..99)
+                            if (S.track && line == S.trackLine) {
+                                textColored(Vec4.fromColor(255, 255, 0), "Line %d", line)
+                                setScrollHere(i * 0.25f) // 0.0f:top, 0.5f:center, 1.0f:bottom
+                            } else
+                                text("Line $line")
+                        val scrollY = scrollY
+                        val scrollMaxY = scrollMaxY
+                        endChild()
+                        text("%.0f/%.0f", scrollY, scrollMaxY)
+                    }
+                }
+            }
+
+            if(treeNode("Horizontal Scrolling")) {
+                
+                bullet(); textWrapped("Horizontal scrolling for a window has to be enabled explicitly via the ImGuiWindowFlags_HorizontalScrollbar flag.")
+                bullet(); textWrapped("You may want to explicitly specify content width by calling SetNextWindowContentWidth() before Begin().")
+                sliderInt("Lines", Hs::lines, 1, 15)
+                pushStyleVar(StyleVar.FrameRounding, 3f)
+                pushStyleVar(StyleVar.FramePadding, Vec2(2f, 1f))
+                beginChild("scrolling", Vec2(0, itemsLineHeightWithSpacing*7 + 30), true, Wf.HorizontalScrollbar.i)
+                for (line in 0 until Hs.lines)                {
+                    /*  Display random stuff (for the sake of this trivial demo we are using basic button+sameLine.
+                        If you want to create your own time line for a real application you may be better off
+                        manipulating the cursor position yourself, aka using SetCursorPos/SetCursorScreenPos to position
+                        the widgets yourself. You may also want to use the lower-level ImDrawList API)  */
+                    val numButtons = 10 + (line * if(line has 1) 9 else 3)
+                    for (n in 0 until numButtons)                    {
+                        if (n > 0) sameLine()
+                        pushId(n + line * 1000)
+                        val label = if(n%15 == 0) "FizzBuzz" else if(n%3==0) "Fizz" else if (n%5==0) "Buzz" else "$n"
+                        val hue = n*0.05f
+                        pushStyleColor(Col.Button, Color.hsv(hue, 0.6f, 0.6f))
+                        pushStyleColor(Col.ButtonHovered, Color.hsv(hue, 0.7f, 0.7f))
+                        pushStyleColor(Col.ButtonActive, Color.hsv(hue, 0.8f, 0.8f))
+                        button(label, Vec2(40f + sin((line + n).f) * 20f, 0f))
+                        popStyleColor(3)
+                        popId()
+                    }
+                }
+//                val _scrollX = scrollX
+//                val scrollMaxX = scrollMaxX
+//                endChild()
+//                popStyleVar(2)
+//                var scrollXDelta = 0f
+//                smallButton("<<"); if (isItemActive) scrollXDelta = -IO.deltaTime * 1000f; sameLine()
+//                text("Scroll from code"); sameLine()
+//                smallButton(">>"); if (isItemActive) scrollXDelta = IO.deltaTime * 1000f; sameLine()
+//                text("%.0f/%.0f", _scrollX, scrollMaxX)
+//                if (scrollXDelta != 0f)                {
+//                    beginChild("scrolling") // Demonstrate a trick: you can use Begin to set yourself in the context of another window (here we are already out of your child window)
+//                    scrollX += scrollXDelta
+//                    end()
 //                }
-//                if (goto_line && line >= 100)
-//                    ImGui::SetScrollHere();
-//                ImGui::EndChild();
-//
-//                ImGui::SameLine();
-//
-//                ImGui::PushStyleVar(ImGuiStyleVar_ChildWindowRounding, 5.0f);
-//                ImGui::BeginChild("Sub2", ImVec2(0,300), true);
-//                ImGui::Text("With border");
-//                ImGui::Columns(2);
-//                for (int i = 0; i < 100; i++)
-//                {
-//                    if (i == 50)
-//                        ImGui::NextColumn();
-//                    char buf[32];
-//                    sprintf(buf, "%08x", i*5731);
-//                    ImGui::Button(buf, ImVec2(-1.0f, 0.0f));
-//                }
-//                ImGui::EndChild();
-//                ImGui::PopStyleVar();
-//
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Widgets Width"))
-//            {
-//                static float f = 0.0f;
-//                ImGui::Text("PushItemWidth(100)");
-//                ImGui::SameLine(); ShowHelpMarker("Fixed width.");
-//                ImGui::PushItemWidth(100);
-//                ImGui::DragFloat("float##1", &f);
-//                ImGui::PopItemWidth();
-//
-//                ImGui::Text("PushItemWidth(GetWindowWidth() * 0.5f)");
-//                ImGui::SameLine(); ShowHelpMarker("Half of window width.");
-//                ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.5f);
-//                ImGui::DragFloat("float##2", &f);
-//                ImGui::PopItemWidth();
-//
-//                ImGui::Text("PushItemWidth(GetContentRegionAvailWidth() * 0.5f)");
-//                ImGui::SameLine(); ShowHelpMarker("Half of available width.\n(~ right-cursor_pos)\n(works within a column set)");
-//                ImGui::PushItemWidth(ImGui::GetContentRegionAvailWidth() * 0.5f);
-//                ImGui::DragFloat("float##3", &f);
-//                ImGui::PopItemWidth();
-//
-//                ImGui::Text("PushItemWidth(-100)");
-//                ImGui::SameLine(); ShowHelpMarker("Align to right edge minus 100");
-//                ImGui::PushItemWidth(-100);
-//                ImGui::DragFloat("float##4", &f);
-//                ImGui::PopItemWidth();
-//
-//                ImGui::Text("PushItemWidth(-1)");
-//                ImGui::SameLine(); ShowHelpMarker("Align to right edge");
-//                ImGui::PushItemWidth(-1);
-//                ImGui::DragFloat("float##5", &f);
-//                ImGui::PopItemWidth();
-//
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Basic Horizontal Layout"))
-//            {
-//                ImGui::TextWrapped("(Use ImGui::SameLine() to keep adding items to the right of the preceding item)");
-//
-//                // Text
-//                ImGui::Text("Two items: Hello"); ImGui::SameLine();
-//                ImGui::TextColored(ImVec4(1,1,0,1), "Sailor");
-//
-//                // Adjust spacing
-//                ImGui::Text("More spacing: Hello"); ImGui::SameLine(0, 20);
-//                ImGui::TextColored(ImVec4(1,1,0,1), "Sailor");
-//
-//                // Button
-//                ImGui::AlignFirstTextHeightToWidgets();
-//                ImGui::Text("Normal buttons"); ImGui::SameLine();
-//                ImGui::Button("Banana"); ImGui::SameLine();
-//                ImGui::Button("Apple"); ImGui::SameLine();
-//                ImGui::Button("Corniflower");
-//
-//                // Button
-//                ImGui::Text("Small buttons"); ImGui::SameLine();
-//                ImGui::SmallButton("Like this one"); ImGui::SameLine();
-//                ImGui::Text("can fit within a text block.");
-//
-//                // Aligned to arbitrary position. Easy/cheap column.
-//                ImGui::Text("Aligned");
-//                ImGui::SameLine(150); ImGui::Text("x=150");
-//                ImGui::SameLine(300); ImGui::Text("x=300");
-//                ImGui::Text("Aligned");
-//                ImGui::SameLine(150); ImGui::SmallButton("x=150");
-//                ImGui::SameLine(300); ImGui::SmallButton("x=300");
-//
-//                // Checkbox
-//                static bool c1=false,c2=false,c3=false,c4=false;
-//                ImGui::Checkbox("My", &c1); ImGui::SameLine();
-//                ImGui::Checkbox("Tailor", &c2); ImGui::SameLine();
-//                ImGui::Checkbox("Is", &c3); ImGui::SameLine();
-//                ImGui::Checkbox("Rich", &c4);
-//
-//                // Various
-//                static float f0=1.0f, f1=2.0f, f2=3.0f;
-//                ImGui::PushItemWidth(80);
-//                const char* items[] = { "AAAA", "BBBB", "CCCC", "DDDD" };
-//                static int item = -1;
-//                ImGui::Combo("Combo", &item, items, IM_ARRAYSIZE(items)); ImGui::SameLine();
-//                ImGui::SliderFloat("X", &f0, 0.0f,5.0f); ImGui::SameLine();
-//                ImGui::SliderFloat("Y", &f1, 0.0f,5.0f); ImGui::SameLine();
-//                ImGui::SliderFloat("Z", &f2, 0.0f,5.0f);
-//                ImGui::PopItemWidth();
-//
-//                ImGui::PushItemWidth(80);
-//                ImGui::Text("Lists:");
-//                static int selection[4] = { 0, 1, 2, 3 };
-//                for (int i = 0; i < 4; i++)
-//                {
-//                    if (i > 0) ImGui::SameLine();
-//                    ImGui::PushID(i);
-//                    ImGui::ListBox("", &selection[i], items, IM_ARRAYSIZE(items));
-//                    ImGui::PopID();
-//                    //if (ImGui::IsItemHovered()) ImGui::SetTooltip("ListBox %d hovered", i);
-//                }
-//                ImGui::PopItemWidth();
-//
-//                // Dummy
-//                ImVec2 sz(30,30);
-//                ImGui::Button("A", sz); ImGui::SameLine();
-//                ImGui::Dummy(sz); ImGui::SameLine();
-//                ImGui::Button("B", sz);
-//
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Groups"))
-//            {
-//                ImGui::TextWrapped("(Using ImGui::BeginGroup()/EndGroup() to layout items. BeginGroup() basically locks the horizontal position. EndGroup() bundles the whole group so that you can use functions such as IsItemHovered() on it.)");
-//                ImGui::BeginGroup();
-//                {
-//                    ImGui::BeginGroup();
-//                    ImGui::Button("AAA");
-//                    ImGui::SameLine();
-//                    ImGui::Button("BBB");
-//                    ImGui::SameLine();
-//                    ImGui::BeginGroup();
-//                    ImGui::Button("CCC");
-//                    ImGui::Button("DDD");
-//                    ImGui::EndGroup();
-//                    ImGui::SameLine();
-//                    ImGui::Button("EEE");
-//                    ImGui::EndGroup();
-//                    if (ImGui::IsItemHovered())
-//                        ImGui::SetTooltip("First group hovered");
-//                }
-//                // Capture the group size and create widgets using the same size
-//                ImVec2 size = ImGui::GetItemRectSize();
-//                const float values[5] = { 0.5f, 0.20f, 0.80f, 0.60f, 0.25f };
-//                ImGui::PlotHistogram("##values", values, IM_ARRAYSIZE(values), 0, NULL, 0.0f, 1.0f, size);
-//
-//                ImGui::Button("ACTION", ImVec2((size.x - ImGui::GetStyle().ItemSpacing.x)*0.5f,size.y));
-//                ImGui::SameLine();
-//                ImGui::Button("REACTION", ImVec2((size.x - ImGui::GetStyle().ItemSpacing.x)*0.5f,size.y));
-//                ImGui::EndGroup();
-//                ImGui::SameLine();
-//
-//                ImGui::Button("LEVERAGE\nBUZZWORD", size);
-//                ImGui::SameLine();
-//
-//                ImGui::ListBoxHeader("List", size);
-//                ImGui::Selectable("Selected", true);
-//                ImGui::Selectable("Not Selected", false);
-//                ImGui::ListBoxFooter();
-//
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Text Baseline Alignment"))
-//            {
-//                ImGui::TextWrapped("(This is testing the vertical alignment that occurs on text to keep it at the same baseline as widgets. Lines only composed of text or \"small\" widgets fit in less vertical spaces than lines with normal widgets)");
-//
-//                ImGui::Text("One\nTwo\nThree"); ImGui::SameLine();
-//                ImGui::Text("Hello\nWorld"); ImGui::SameLine();
-//                ImGui::Text("Banana");
-//
-//                ImGui::Text("Banana"); ImGui::SameLine();
-//                ImGui::Text("Hello\nWorld"); ImGui::SameLine();
-//                ImGui::Text("One\nTwo\nThree");
-//
-//                ImGui::Button("HOP##1"); ImGui::SameLine();
-//                ImGui::Text("Banana"); ImGui::SameLine();
-//                ImGui::Text("Hello\nWorld"); ImGui::SameLine();
-//                ImGui::Text("Banana");
-//
-//                ImGui::Button("HOP##2"); ImGui::SameLine();
-//                ImGui::Text("Hello\nWorld"); ImGui::SameLine();
-//                ImGui::Text("Banana");
-//
-//                ImGui::Button("TEST##1"); ImGui::SameLine();
-//                ImGui::Text("TEST"); ImGui::SameLine();
-//                ImGui::SmallButton("TEST##2");
-//
-//                ImGui::AlignFirstTextHeightToWidgets(); // If your line starts with text, call this to align it to upcoming widgets.
-//                ImGui::Text("Text aligned to Widget"); ImGui::SameLine();
-//                ImGui::Button("Widget##1"); ImGui::SameLine();
-//                ImGui::Text("Widget"); ImGui::SameLine();
-//                ImGui::SmallButton("Widget##2"); ImGui::SameLine();
-//                ImGui::Button("Widget##3");
-//
-//                // Tree
-//                const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-//                ImGui::Button("Button##1");
-//                ImGui::SameLine(0.0f, spacing);
-//                if (ImGui::TreeNode("Node##1")) { for (int i = 0; i < 6; i++) ImGui::BulletText("Item %d..", i); ImGui::TreePop(); }    // Dummy tree data
-//
-//                ImGui::AlignFirstTextHeightToWidgets();         // Vertically align text node a bit lower so it'll be vertically centered with upcoming widget. Otherwise you can use SmallButton (smaller fit).
-//                bool node_open = ImGui::TreeNode("Node##2");  // Common mistake to avoid: if we want to SameLine after TreeNode we need to do it before we add child content.
-//                ImGui::SameLine(0.0f, spacing); ImGui::Button("Button##2");
-//                if (node_open) { for (int i = 0; i < 6; i++) ImGui::BulletText("Item %d..", i); ImGui::TreePop(); }   // Dummy tree data
-//
-//                // Bullet
-//                ImGui::Button("Button##3");
-//                ImGui::SameLine(0.0f, spacing);
-//                ImGui::BulletText("Bullet text");
-//
-//                ImGui::AlignFirstTextHeightToWidgets();
-//                ImGui::BulletText("Node");
-//                ImGui::SameLine(0.0f, spacing); ImGui::Button("Button##4");
-//
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Scrolling"))
-//            {
-//                ImGui::TextWrapped("(Use SetScrollHere() or SetScrollFromPosY() to scroll to a given position.)");
-//                static bool track = true;
-//                static int track_line = 50, scroll_to_px = 200;
-//                ImGui::Checkbox("Track", &track);
-//                ImGui::PushItemWidth(100);
-//                ImGui::SameLine(130); track |= ImGui::DragInt("##line", &track_line, 0.25f, 0, 99, "Line = %.0f");
-//                bool scroll_to = ImGui::Button("Scroll To Pos");
-//                ImGui::SameLine(130); scroll_to |= ImGui::DragInt("##pos_y", &scroll_to_px, 1.00f, 0, 9999, "Y = %.0f px");
-//                ImGui::PopItemWidth();
-//                if (scroll_to) track = false;
-//
-//                for (int i = 0; i < 5; i++)
-//                {
-//                    if (i > 0) ImGui::SameLine();
-//                    ImGui::BeginGroup();
-//                    ImGui::Text("%s", i == 0 ? "Top" : i == 1 ? "25%" : i == 2 ? "Center" : i == 3 ? "75%" : "Bottom");
-//                    ImGui::BeginChild(ImGui::GetID((void*)(intptr_t)i), ImVec2(ImGui::GetWindowWidth() * 0.17f, 200.0f), true);
-//                    if (scroll_to)
-//                        ImGui::SetScrollFromPosY(ImGui::GetCursorStartPos().y + scroll_to_px, i * 0.25f);
-//                    for (int line = 0; line < 100; line++)
-//                    {
-//                        if (track && line == track_line)
-//                        {
-//                            ImGui::TextColored(ImColor(255,255,0), "Line %d", line);
-//                            ImGui::SetScrollHere(i * 0.25f); // 0.0f:top, 0.5f:center, 1.0f:bottom
-//                        }
-//                        else
-//                        {
-//                            ImGui::Text("Line %d", line);
-//                        }
-//                    }
-//                    float scroll_y = ImGui::GetScrollY(), scroll_max_y = ImGui::GetScrollMaxY();
-//                    ImGui::EndChild();
-//                    ImGui::Text("%.0f/%0.f", scroll_y, scroll_max_y);
-//                    ImGui::EndGroup();
-//                }
-//                ImGui::TreePop();
-//            }
-//
-//            if (ImGui::TreeNode("Horizontal Scrolling"))
-//            {
-//                ImGui::Bullet(); ImGui::TextWrapped("Horizontal scrolling for a window has to be enabled explicitly via the ImGuiWindowFlags_HorizontalScrollbar flag.");
-//                ImGui::Bullet(); ImGui::TextWrapped("You may want to explicitly specify content width by calling SetNextWindowContentWidth() before Begin().");
-//                static int lines = 7;
-//                ImGui::SliderInt("Lines", &lines, 1, 15);
-//                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
-//                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 1.0f));
-//                ImGui::BeginChild("scrolling", ImVec2(0, ImGui::GetItemsLineHeightWithSpacing()*7 + 30), true, ImGuiWindowFlags_HorizontalScrollbar);
-//                for (int line = 0; line < lines; line++)
-//                {
-//                    // Display random stuff (for the sake of this trivial demo we are using basic Button+SameLine. If you want to create your own time line for a real application you may be better off
-//                    // manipulating the cursor position yourself, aka using SetCursorPos/SetCursorScreenPos to position the widgets yourself. You may also want to use the lower-level ImDrawList API)
-//                    int num_buttons = 10 + ((line & 1) ? line * 9 : line * 3);
-//                    for (int n = 0; n < num_buttons; n++)
-//                    {
-//                        if (n > 0) ImGui::SameLine();
-//                        ImGui::PushID(n + line * 1000);
-//                        char num_buf[16];
-//                        const char* label = (!(n%15)) ? "FizzBuzz" : (!(n%3)) ? "Fizz" : (!(n%5)) ? "Buzz" : (sprintf(num_buf, "%d", n), num_buf);
-//                        float hue = n*0.05f;
-//                        ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(hue, 0.6f, 0.6f));
-//                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(hue, 0.7f, 0.7f));
-//                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(hue, 0.8f, 0.8f));
-//                        ImGui::Button(label, ImVec2(40.0f + sinf((float)(line + n)) * 20.0f, 0.0f));
-//                        ImGui::PopStyleColor(3);
-//                        ImGui::PopID();
-//                    }
-//                }
-//                float scroll_x = ImGui::GetScrollX(), scroll_max_x = ImGui::GetScrollMaxX();
-//                ImGui::EndChild();
-//                ImGui::PopStyleVar(2);
-//                float scroll_x_delta = 0.0f;
-//                ImGui::SmallButton("<<"); if (ImGui::IsItemActive()) scroll_x_delta = -ImGui::GetIO().DeltaTime * 1000.0f; ImGui::SameLine();
-//                ImGui::Text("Scroll from code"); ImGui::SameLine();
-//                ImGui::SmallButton(">>"); if (ImGui::IsItemActive()) scroll_x_delta = +ImGui::GetIO().DeltaTime * 1000.0f; ImGui::SameLine();
-//                ImGui::Text("%.0f/%.0f", scroll_x, scroll_max_x);
-//                if (scroll_x_delta != 0.0f)
-//                {
-//                    ImGui::BeginChild("scrolling"); // Demonstrate a trick: you can use Begin to set yourself in the context of another window (here we are already out of your child window)
-//                    ImGui::SetScrollX(ImGui::GetScrollX() + scroll_x_delta);
-//                    ImGui::End();
-//                }
-//                ImGui::TreePop();
-//            }
+            }
 //
 //            if (ImGui::TreeNode("Clipping"))
 //            {
@@ -1382,9 +1339,8 @@ interface imgui_demoDebugInfo {
 //                    +        }
         }
 
-//        if (ImGui::CollapsingHeader("Columns"))
-//        {
-//            ImGui::PushID("Columns");
+        collapsingHeader("Columns") {
+            //            ImGui::PushID("Columns");
 //
 //            // Basic columns
 //            if (ImGui::TreeNode("Basic"))
@@ -1496,8 +1452,7 @@ interface imgui_demoDebugInfo {
 //                }
 //                ImGui::Columns(1);
 //                if (h_borders) ImGui::Separator();
-//        ImGui::TreePop();
-//        +        }
+        }
 //    +
 //    +        // Scrolling columns
 //    +        /*
@@ -1728,11 +1683,11 @@ interface imgui_demoDebugInfo {
             checkbox("Show clipping rectangles when hovering an ImDrawCmd", ::showClipRects)
             separator()
 
-            Funcs.nodeWindows(g.windows, "Windows")
+            Funcs0.nodeWindows(g.windows, "Windows")
             if (treeNode("DrawList", "Active DrawLists (${g.renderDrawLists[0].size})")) {
-                g.renderDrawLists.forEach { layer -> layer.forEach { Funcs.nodeDrawList(it, "DrawList") } }
+                g.renderDrawLists.forEach { layer -> layer.forEach { Funcs0.nodeDrawList(it, "DrawList") } }
                 for (i in g.renderDrawLists[0])
-                    Funcs.nodeDrawList(i, "DrawList")
+                    Funcs0.nodeDrawList(i, "DrawList")
                 treePop()
             }
             if (treeNode("Popups", "Open Popups Stack (${g.openPopupStack.size})")) {
@@ -1759,143 +1714,6 @@ interface imgui_demoDebugInfo {
         end()
     }
 
-    object Funcs {
-
-        fun nodeDrawList(drawList: DrawList, label: String) {
-
-            val nodeOpen = treeNode(drawList, "$label: '${drawList._ownerName}' ${drawList.vtxBuffer.size} vtx, " +
-                    "${drawList.idxBuffer.size} indices, ${drawList.cmdBuffer.size} cmds")
-            if (drawList === windowDrawList) {
-                sameLine()
-                // Can't display stats for active draw list! (we don't have the data double-buffered)
-                textColored(Vec4.fromColor(255, 100, 100), "CURRENTLY APPENDING")
-                if (nodeOpen) treePop()
-                return
-            }
-            if (!nodeOpen)
-                return
-
-            val overlayDrawList = g.overlayDrawList   // Render additional visuals into the top-most draw list
-            overlayDrawList.pushClipRectFullScreen()
-            var elemOffset = 0
-            for (i in drawList.cmdBuffer.indices) {
-                val cmd = drawList.cmdBuffer[i]
-                if (cmd.userCallback == null && cmd.elemCount == 0) continue
-                if (cmd.userCallback != null) {
-                    TODO()
-//                        ImGui::BulletText("Callback %p, user_data %p", pcmd->UserCallback, pcmd->UserCallbackData)
-//                        continue
-                }
-                val idxBuffer = drawList.idxBuffer.takeIf { it.isNotEmpty() }
-                val mode = if (drawList.idxBuffer.isNotEmpty()) "indexed" else "non-indexed"
-                val cmdNodeOpen = treeNode(i, "Draw %-4d $mode vtx, tex = ${cmd.textureId}, clip_rect = (%.0f,%.0f)..(%.0f,%.0f)",
-                        cmd.elemCount, cmd.clipRect.x, cmd.clipRect.y, cmd.clipRect.z, cmd.clipRect.w)
-                if (showClipRects && isItemHovered()) {
-                    val clipRect = Rect(cmd.clipRect)
-                    val vtxsRect = Rect()
-                    for (e in elemOffset until elemOffset + cmd.elemCount)
-                        vtxsRect.add(drawList.vtxBuffer[idxBuffer?.get(e) ?: e].pos)
-                    clipRect.floor(); overlayDrawList.addRect(clipRect.min, clipRect.max, COL32(255, 255, 0, 255))
-                    vtxsRect.floor(); overlayDrawList.addRect(vtxsRect.min, vtxsRect.max, COL32(255, 0, 255, 255))
-                }
-                if (!cmdNodeOpen) continue
-                // Manually coarse clip our print out of individual vertices to save CPU, only items that may be visible.
-                val clipper = ListClipper(cmd.elemCount / 3)
-                while (clipper.step()) {
-                    var vtxI = elemOffset + clipper.display.start * 3
-                    for (prim in clipper.display.start until clipper.display.last) {
-                        val buf = CharArray(300)
-                        var bufP = 0
-                        val trianglesPos = arrayListOf(Vec2(), Vec2(), Vec2())
-                        for (n in 0 until 3) {
-                            val v = drawList.vtxBuffer[idxBuffer?.get(vtxI) ?: vtxI]
-                            trianglesPos[n] = v.pos
-                            val name = if (n == 0) "vtx" else "   "
-                            val string = "$name %04d { pos = (%8.2f,%8.2f), uv = (%.6f,%.6f), col = %08X }\n".format(style.locale,
-                                    vtxI, v.pos.x, v.pos.y, v.uv.x, v.uv.y, v.col)
-                            string.toCharArray(buf, bufP)
-                            bufP += string.length
-                            vtxI++
-                        }
-                        selectable(buf.joinToString("", limit = bufP, truncated = ""), false)
-                        if (isItemHovered())
-                        // Add triangle without AA, more readable for large-thin triangle
-                            overlayDrawList.addPolyline(trianglesPos, COL32(255, 255, 0, 255), true, 1f, false)
-                    }
-                }
-                treePop()
-                elemOffset += cmd.elemCount
-            }
-            overlayDrawList.popClipRect()
-            treePop()
-        }
-
-        fun nodeWindows(windows: ArrayList<Window>, label: String) {
-            if (!treeNode(label, "$label (${windows.size})")) return
-            for (i in 0 until windows.size)
-                nodeWindow(windows[i], "Window")
-            treePop()
-        }
-
-        fun nodeWindow(window: Window, label: String) {
-            val active = if (window.active or window.wasActive) "active" else "inactive"
-            if (!treeNode(window, "$label '${window.name}', $active @ 0x%X", System.identityHashCode(window)))
-                return
-            nodeDrawList(window.drawList, "DrawList")
-            bulletText("Pos: (%.1f,%.1f), Size: (%.1f,%.1f), SizeContents (%.1f,%.1f)", window.pos.x.f, window.pos.y.f,
-                    window.size.x, window.size.y, window.sizeContents.x, window.sizeContents.y)
-            if (isItemHovered())
-                overlayDrawList.addRect(Vec2(window.pos), Vec2(window.pos + window.size), COL32(255, 255, 0, 255))
-            bulletText("Scroll: (%.2f,%.2f)", window.scroll.x, window.scroll.y)
-            bulletText("Active: ${window.active}, Accessed: ${window.accessed}")
-            if (window.rootWindow !== window) nodeWindow(window.rootWindow, "RootWindow")
-            if (window.dc.childWindows.isNotEmpty()) nodeWindows(window.dc.childWindows, "ChildWindows")
-            bulletText("Storage: %d bytes", window.stateStorage.data.size * Int.BYTES * 2)
-            treePop()
-        }
-
-        fun showDummyObject(prefix: String, uid: Int) {
-//            println("showDummyObject $prefix _$uid")
-            //  Use object uid as identifier. Most commonly you could also use the object pointer as a base ID.
-            pushId(uid)
-            /*  Text and Tree nodes are less high than regular widgets, here we add vertical spacing to make the tree
-                lines equal high.             */
-            alignTextToFramePadding()
-            val nodeOpen = treeNode("Object", "${prefix}_$uid")
-            nextColumn()
-            alignTextToFramePadding()
-            text("my sailor is rich")
-            nextColumn()
-            if (nodeOpen) {
-                for (i in 0..7) {
-                    pushId(i) // Use field index as identifier.
-                    if (i < 2)
-                        showDummyObject("Child", 424242)
-                    else {
-                        alignTextToFramePadding()
-                        // Here we use a Selectable (instead of Text) to highlight on hover
-                        //Text("Field_%d", i);
-                        bullet()
-                        selectable("Field_$i")
-                        nextColumn()
-                        pushItemWidth(-1f)
-                        if (i >= 5)
-                            inputFloat("##value", dummyMembers, i, 1f)
-                        else
-                            dragFloat("##value", dummyMembers, i, 0.01f)
-                        popItemWidth()
-                        nextColumn()
-                    }
-                    popId()
-                }
-                treePop()
-            }
-            popId()
-        }
-
-        val dummyMembers = floatArrayOf(0f, 0f, 1f, 3.1416f, 100f, 999f, 0f, 0f, 0f)
-    }
-
     fun showStyleEditor(ref: Style? = null) {
 
         /*  You can pass in a reference ImGuiStyle structure to compare to, revert to and save to
@@ -1917,7 +1735,7 @@ interface imgui_demoDebugInfo {
         treeNode("Rendering") {
             checkbox("Anti-aliased lines", style::antiAliasedLines)
             checkbox("Anti-aliased shapes", style::antiAliasedShapes)
-            pushItemWidth(100f)
+            pushItemWidth(100)
             dragFloat("Curve Tessellation Tolerance", style::curveTessellationTol, 0.02f, 0.1f, Float.MAX_VALUE, "", 2f)
             if (style.curveTessellationTol < 0f) style.curveTessellationTol = 0.1f
             /*  Not exposing zero here so user doesn't "lose" the UI (zero alpha clips all widgets).
@@ -1927,22 +1745,22 @@ interface imgui_demoDebugInfo {
         }
 
         treeNode("Settings") {
-            sliderFloatVec2("WindowPadding", style.windowPadding, 0f, 20f, "%.0f")
+            sliderVec2("WindowPadding", style.windowPadding, 0f, 20f, "%.0f")
             sliderFloat("WindowRounding", style::windowRounding, 0f, 16f, "%.0f")
             sliderFloat("ChildWindowRounding", style::childWindowRounding, 0f, 16f, "%.0f")
-            sliderFloatVec2("FramePadding", style.framePadding, 0f, 20f, "%.0f")
+            sliderVec2("FramePadding", style.framePadding, 0f, 20f, "%.0f")
             sliderFloat("FrameRounding", style::frameRounding, 0f, 16f, "%.0f")
-            sliderFloatVec2("ItemSpacing", style.itemSpacing, 0f, 20f, "%.0f")
-            sliderFloatVec2("ItemInnerSpacing", style.itemInnerSpacing, 0f, 20f, "%.0f")
-            sliderFloatVec2("TouchExtraPadding", style.touchExtraPadding, 0f, 10f, "%.0f")
+            sliderVec2("ItemSpacing", style.itemSpacing, 0f, 20f, "%.0f")
+            sliderVec2("ItemInnerSpacing", style.itemInnerSpacing, 0f, 20f, "%.0f")
+            sliderVec2("TouchExtraPadding", style.touchExtraPadding, 0f, 10f, "%.0f")
             sliderFloat("IndentSpacing", style::indentSpacing, 0f, 30f, "%.0f")
             sliderFloat("ScrollbarSize", style::scrollbarSize, 1f, 20f, "%.0f")
             sliderFloat("ScrollbarRounding", style::scrollbarRounding, 0.0f, 16.0f, "%.0f")
             sliderFloat("GrabMinSize", style::grabMinSize, 1f, 20f, "%.0f")
             sliderFloat("GrabRounding", style::grabRounding, 0f, 16f, "%.0f")
             text("Alignment")
-            sliderFloatVec2("WindowTitleAlign", style.windowTitleAlign, 0f, 1f, "%.2f")
-            sliderFloatVec2("ButtonTextAlign", style.buttonTextAlign, 0f, 1f, "%.2f")
+            sliderVec2("WindowTitleAlign", style.windowTitleAlign, 0f, 1f, "%.2f")
+            sliderVec2("ButtonTextAlign", style.buttonTextAlign, 0f, 1f, "%.2f")
             sameLine()
             showHelpMarker("Alignment applies when a button is larger than its text content.")
         }
@@ -1975,7 +1793,7 @@ interface imgui_demoDebugInfo {
             radioButton("Both", ::alphaFlags, Cef.AlphaPreviewHalf.i)
 
             beginChild("#colors", Vec2(0, 300), true, Wf.AlwaysVerticalScrollbar.i)
-            pushItemWidth(-160f)
+            pushItemWidth(-160)
             for (i in 0 until Col.COUNT.i) {
                 val name = Col.values()[i].name
                 if (!filter.passFilter(name)) // TODO fix bug
@@ -2004,7 +1822,7 @@ interface imgui_demoDebugInfo {
                 image(atlas.texId, Vec2(atlas.texSize), Vec2(), Vec2(1), Vec4.fromColor(255, 255, 255, 255),
                         Vec4.fromColor(255, 255, 255, 128))
             }
-            pushItemWidth(100f)
+            pushItemWidth(100)
             for (i in 0 until atlas.fonts.size) {
 
                 val font = atlas.fonts[i]
@@ -2475,7 +2293,7 @@ interface imgui_demoDebugInfo {
 
             // Iterate dummy objects with dummy members (all the same data)
             for (objI in 0..2)
-                Funcs.showDummyObject("Object", objI)
+                Funcs0.showDummyObject("Object", objI)
 
             columns(1)
             separator()
@@ -2555,6 +2373,143 @@ interface imgui_demoDebugInfo {
             var about = false
         }
 
+        object Funcs0 {
+
+            fun nodeDrawList(drawList: DrawList, label: String) {
+
+                val nodeOpen = treeNode(drawList, "$label: '${drawList._ownerName}' ${drawList.vtxBuffer.size} vtx, " +
+                        "${drawList.idxBuffer.size} indices, ${drawList.cmdBuffer.size} cmds")
+                if (drawList === windowDrawList) {
+                    sameLine()
+                    // Can't display stats for active draw list! (we don't have the data double-buffered)
+                    textColored(Vec4.fromColor(255, 100, 100), "CURRENTLY APPENDING")
+                    if (nodeOpen) treePop()
+                    return
+                }
+                if (!nodeOpen)
+                    return
+
+                val overlayDrawList = g.overlayDrawList   // Render additional visuals into the top-most draw list
+                overlayDrawList.pushClipRectFullScreen()
+                var elemOffset = 0
+                for (i in drawList.cmdBuffer.indices) {
+                    val cmd = drawList.cmdBuffer[i]
+                    if (cmd.userCallback == null && cmd.elemCount == 0) continue
+                    if (cmd.userCallback != null) {
+                        TODO()
+//                        ImGui::BulletText("Callback %p, user_data %p", pcmd->UserCallback, pcmd->UserCallbackData)
+//                        continue
+                    }
+                    val idxBuffer = drawList.idxBuffer.takeIf { it.isNotEmpty() }
+                    val mode = if (drawList.idxBuffer.isNotEmpty()) "indexed" else "non-indexed"
+                    val cmdNodeOpen = treeNode(i, "Draw %-4d $mode vtx, tex = ${cmd.textureId}, clip_rect = (%.0f,%.0f)..(%.0f,%.0f)",
+                            cmd.elemCount, cmd.clipRect.x, cmd.clipRect.y, cmd.clipRect.z, cmd.clipRect.w)
+                    if (showClipRects && isItemHovered()) {
+                        val clipRect = Rect(cmd.clipRect)
+                        val vtxsRect = Rect()
+                        for (e in elemOffset until elemOffset + cmd.elemCount)
+                            vtxsRect.add(drawList.vtxBuffer[idxBuffer?.get(e) ?: e].pos)
+                        clipRect.floor(); overlayDrawList.addRect(clipRect.min, clipRect.max, COL32(255, 255, 0, 255))
+                        vtxsRect.floor(); overlayDrawList.addRect(vtxsRect.min, vtxsRect.max, COL32(255, 0, 255, 255))
+                    }
+                    if (!cmdNodeOpen) continue
+                    // Manually coarse clip our print out of individual vertices to save CPU, only items that may be visible.
+                    val clipper = ListClipper(cmd.elemCount / 3)
+                    while (clipper.step()) {
+                        var vtxI = elemOffset + clipper.display.start * 3
+                        for (prim in clipper.display.start until clipper.display.last) {
+                            val buf = CharArray(300)
+                            var bufP = 0
+                            val trianglesPos = arrayListOf(Vec2(), Vec2(), Vec2())
+                            for (n in 0 until 3) {
+                                val v = drawList.vtxBuffer[idxBuffer?.get(vtxI) ?: vtxI]
+                                trianglesPos[n] = v.pos
+                                val name = if (n == 0) "vtx" else "   "
+                                val string = "$name %04d { pos = (%8.2f,%8.2f), uv = (%.6f,%.6f), col = %08X }\n".format(style.locale,
+                                        vtxI, v.pos.x, v.pos.y, v.uv.x, v.uv.y, v.col)
+                                string.toCharArray(buf, bufP)
+                                bufP += string.length
+                                vtxI++
+                            }
+                            selectable(buf.joinToString("", limit = bufP, truncated = ""), false)
+                            if (isItemHovered())
+                            // Add triangle without AA, more readable for large-thin triangle
+                                overlayDrawList.addPolyline(trianglesPos, COL32(255, 255, 0, 255), true, 1f, false)
+                        }
+                    }
+                    treePop()
+                    elemOffset += cmd.elemCount
+                }
+                overlayDrawList.popClipRect()
+                treePop()
+            }
+
+            fun nodeWindows(windows: ArrayList<Window>, label: String) {
+                if (!treeNode(label, "$label (${windows.size})")) return
+                for (i in 0 until windows.size)
+                    nodeWindow(windows[i], "Window")
+                treePop()
+            }
+
+            fun nodeWindow(window: Window, label: String) {
+                val active = if (window.active or window.wasActive) "active" else "inactive"
+                if (!treeNode(window, "$label '${window.name}', $active @ 0x%X", System.identityHashCode(window)))
+                    return
+                nodeDrawList(window.drawList, "DrawList")
+                bulletText("Pos: (%.1f,%.1f), Size: (%.1f,%.1f), SizeContents (%.1f,%.1f)", window.pos.x.f, window.pos.y.f,
+                        window.size.x, window.size.y, window.sizeContents.x, window.sizeContents.y)
+                if (isItemHovered())
+                    overlayDrawList.addRect(Vec2(window.pos), Vec2(window.pos + window.size), COL32(255, 255, 0, 255))
+                bulletText("Scroll: (%.2f,%.2f)", window.scroll.x, window.scroll.y)
+                bulletText("Active: ${window.active}, Accessed: ${window.accessed}")
+                if (window.rootWindow !== window) nodeWindow(window.rootWindow, "RootWindow")
+                if (window.dc.childWindows.isNotEmpty()) nodeWindows(window.dc.childWindows, "ChildWindows")
+                bulletText("Storage: %d bytes", window.stateStorage.data.size * Int.BYTES * 2)
+                treePop()
+            }
+
+            fun showDummyObject(prefix: String, uid: Int) {
+//            println("showDummyObject $prefix _$uid")
+                //  Use object uid as identifier. Most commonly you could also use the object pointer as a base ID.
+                pushId(uid)
+                /*  Text and Tree nodes are less high than regular widgets, here we add vertical spacing to make the tree
+                    lines equal high.             */
+                alignTextToFramePadding()
+                val nodeOpen = treeNode("Object", "${prefix}_$uid")
+                nextColumn()
+                alignTextToFramePadding()
+                text("my sailor is rich")
+                nextColumn()
+                if (nodeOpen) {
+                    for (i in 0..7) {
+                        pushId(i) // Use field index as identifier.
+                        if (i < 2)
+                            showDummyObject("Child", 424242)
+                        else {
+                            alignTextToFramePadding()
+                            // Here we use a Selectable (instead of Text) to highlight on hover
+                            //Text("Field_%d", i);
+                            bullet()
+                            selectable("Field_$i")
+                            nextColumn()
+                            pushItemWidth(-1)
+                            if (i >= 5)
+                                inputFloat("##value", dummyMembers, i, 1f)
+                            else
+                                dragFloat("##value", dummyMembers, i, 0.01f)
+                            popItemWidth()
+                            nextColumn()
+                        }
+                        popId()
+                    }
+                    treePop()
+                }
+                popId()
+            }
+
+            val dummyMembers = floatArrayOf(0f, 0f, 1f, 3.1416f, 100f, 999f, 0f, 0f, 0f)
+        }
+
         var noTitlebar = false
         var noBorder = true
         var noResize = false
@@ -2583,8 +2538,6 @@ interface imgui_demoDebugInfo {
 
         var closableGroup = true
 
-        val buf = CharArray(32).apply { "\u00e6\u0097\u00a5\u00e6\u009c\u00ac\u00e8\u00aa\u009e".toCharArray(this) }
-
         var pressedCount = 0
 
         val selected = BooleanArray(4 + 3 + 16 + 16, { it == 1 || it == 23 + 0 || it == 23 + 5 || it == 23 + 10 || it == 23 + 15 })
@@ -2606,6 +2559,7 @@ interface imgui_demoDebugInfo {
         }
 
         var clicked = 0
+
         var check = true
         var e = 0
         val arr = floatArrayOf(0.6f, 0.1f, 1f, 0.5f, 0.92f, 0.1f, 0.2f)
@@ -2623,6 +2577,99 @@ interface imgui_demoDebugInfo {
         var f3 = 0.123f
         var f4 = 0f
         var angle = 0f
+        val col1 = floatArrayOf(1f, 0f, 0.2f)
+        val col2 = floatArrayOf(0.4f, 0.7f, 0f, 0.5f)
+        var listboxItemCurrent = 1
+
+        var wrapWidth = 200f
+        // "nihongo"
+        val buf = CharArray(32).apply { "\u00e6\u0097\u00a5\u00e6\u009c\u00ac\u00e8\u00aa\u009e".toCharArray(this) }
+        val buf1 = CharArray(64)
+        val buf2 = CharArray(64)
+        val buf3 = CharArray(64)
+        val buf4 = CharArray(64)
+        val buf5 = CharArray(64)
+        val buf6 = CharArray(64)
+
+        /* Plots Widgets */
+        var animate = true
+        var refreshTime = 0f
+        val values = FloatArray(90)
+        var valuesOffset = 0
+        var phase = 0f
+
+        var funcType = 0
+        var displayCount = 70
+
+        object Funcs1 {
+            fun sin(i: Int) = kotlin.math.sin(i * 0.1f)
+            fun saw(i: Int) = if (i has 1) 1f else -1f
+        }
+
+        var progress = 0f
+        var progressDir = 1f
+
+        /* Color/Picker Widgets */
+        val color = Vec4.fromColor(114, 144, 154, 200)
+        var hdr = false
+        var alphaPreview = true
+        var alphaHalfPreview = false
+        var optionsMenu = true
+        var savedPaletteInited = false
+        var savedPalette = Array(32, { Vec4() })
+        var backupColor = Vec4()
+        var alpha = true
+        var alphaBar = true
+        var sidePreview = true
+        var refColor = false
+        var refColorV = Vec4(1f, 0f, 1f, 0.5f)
+        var inputsMode = 2
+        var pickerMode = 0
+
+        /* Range Widgets */
+        var begin = 10f
+        var end = 90f
+        var beginI = 100
+        var endI = 1000
+
+        /* Multi-component Widgets */
+        var vec4f = floatArrayOf(0.1f, 0.2f, 0.3f, 0.44f)
+        val vec4i = intArrayOf(1, 5, 100, 255)
+    }
+
+    /* Vertical Sliders */
+    object Vs {
+        var spacing = 4f
+        var intValue = 0
+        val values = floatArrayOf(0f, 0.6f, 0.35f, 0.9f, 0.7f, 0.2f, 0f)
+        val values2 = floatArrayOf(0.2f, 0.8f, 0.4f, 0.25f)
+    }
+
+    /* Layout */
+    object L {
+        var line = 50
+        var f = 0f
+        var c1 = false
+        var c2 = false
+        var c3 = false
+        var c4 = false
+        var f0 = 1f
+        var f1 = 2f
+        var f2 = 3f
+        var item = -1
+        val selection = intArrayOf(0, 1, 2, 3)
+    }
+
+    /* Scrolling */
+    object S {
+        var track = true
+        var trackLine = 50
+        var scrollToPx = 200
+    }
+
+    /* Horizontal Scrolling */
+    object Hs {
+        var lines = 7
     }
 
     /** Demonstrating creating a simple console window, with scrolling, filtering, completion and history.

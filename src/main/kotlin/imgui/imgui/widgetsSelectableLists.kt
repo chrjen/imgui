@@ -33,12 +33,13 @@ import imgui.ImGui.renderTextClipped
 import imgui.ImGui.sameLine
 import imgui.ImGui.textLineHeightWithSpacing
 import imgui.ImGui.windowContentRegionMax
-import imgui.internal.ButtonFlags as Bf
 import imgui.internal.Rect
 import imgui.internal.or
-import imgui.WindowFlags as Wf
-import imgui.SelectableFlags as Sf
+import kotlin.reflect.KMutableProperty0
 import imgui.ItemFlags as If
+import imgui.SelectableFlags as Sf
+import imgui.WindowFlags as Wf
+import imgui.internal.ButtonFlags as Bf
 
 /** Widgets: Selectable / Lists */
 interface imgui_widgetsSelectableLists {
@@ -121,43 +122,52 @@ interface imgui_widgetsSelectableLists {
         return pressed
     }
 
-    fun selectable(label: String, pSelected: BooleanArray, ptr: Int, flags: Int = 0, size: Vec2 = Vec2()): Boolean {
-        if (selectable(label, pSelected[ptr], flags, size)) {
-            pSelected[ptr] = !pSelected[ptr]
+    fun selectable(label: String, selected: BooleanArray, ptr: Int, flags: Int = 0, size: Vec2 = Vec2()) = withBool { b ->
+        b.set(selected[ptr])
+        val res = selectable(label, b, flags, size)
+        selected[ptr] = b()
+        res
+    }
+
+    fun selectable(label: String, selected: KMutableProperty0<Boolean>, flags: Int = 0, size: Vec2 = Vec2()): Boolean {
+        if (selectable(label, selected(), flags, size)) {
+            selected.set(!selected())
             return true
         }
         return false
     }
 
-    fun listBox(label: String, currentItem: IntArray, items: Array<String>, heightInItems: Int = -1) =
+    fun listBox(label: String, currentItem: KMutableProperty0<Int>, items: Array<String>, heightInItems: Int = -1) =
             listBox(label, currentItem, imgui_widgetsText.Items.arrayGetter, items, heightInItems)
 
-    fun listBox(label: String, currentItem: IntArray, itemsGetter: (Array<String>, Int, Array<String>) -> Boolean, data: Array<String>,
-                heightInItems: Int = -1): Boolean {
+    fun listBox(label: String, currentItem: IntArray, items: Array<String>, heightInItems: Int = -1) = withInt { i ->
+        i.set(currentItem[0])
+        listBox(label, i, imgui_widgetsText.Items.arrayGetter, items, heightInItems).also { currentItem[0] = i() }
+    }
+
+    fun listBox(label: String, currentItem: KMutableProperty0<Int>, itemsGetter: (Array<String>, Int, Array<String>) -> Boolean,
+                data: Array<String>, heightInItems: Int = -1): Boolean {
 
         val itemsCount = data.size
         if (!listBoxHeader(label, itemsCount, heightInItems)) return false
-
         // Assume all items have even height (= 1 line of text). If you need items of different or variable sizes you can create a custom version of ListBox() in your code without using the clipper.
         var valueChanged = false
         // We know exactly our line height here so we pass it as a minor optimization, but generally you don't need to.
         val clipper = ListClipper(itemsCount, textLineHeightWithSpacing)
         while (clipper.step())
-            for (i in clipper.display.start until clipper.display.last) {
-                val itemSelected = booleanArrayOf(i == currentItem[0])
+            for (i in clipper.display.start until clipper.display.last) withBool { b ->
+                b.set(i == currentItem())
                 val itemText = arrayOf("")
-                if (!itemsGetter(data, i, itemText))
-                    itemText[0] = "*Unknown item*"
-
+                if (!itemsGetter(data, i, itemText)) itemText[0] = "*Unknown item*"
                 pushId(i)
-                if (selectable(itemText[0], itemSelected[0])) {
-                    currentItem[0] = i
+                if (selectable(itemText[0], b)) {
+                    currentItem.set(i)
                     valueChanged = true
                 }
                 popId()
             }
         listBoxFooter()
-        return valueChanged
+        return false
     }
 
     /** Helper to calculate the size of a listbox and display a label on the right.
@@ -190,18 +200,14 @@ interface imgui_widgetsSelectableLists {
     /** use if you want to reimplement ListBox() will custom data or interactions. make sure to call ListBoxFooter()
      *  afterwards. */
     fun listBoxHeader(label: String, itemsCount: Int, heightInItems: Int = -1): Boolean {
-
         /*  Size default to hold ~7 items. Fractional number of items helps seeing that we can scroll down/up without
             looking at scrollbar.
             However we don't add +0.40f if items_count <= height_in_items. It is slightly dodgy, because it means a
             dynamic list of items will make the widget resize occasionally when it crosses that size.
             I am expecting that someone will come and complain about this behavior in a remote future, then we can
             advise on a better solution.    */
-        var heightInItems = heightInItems
-        if (heightInItems < 0)
-            heightInItems = glm.min(itemsCount, 7)
+        val heightInItems = if (heightInItems < 0) glm.min(itemsCount, 7) else heightInItems
         val heightInItemsF = heightInItems + if (heightInItems < itemsCount) 0.4f else 0f
-
         /*  We include ItemSpacing.y so that a list sized for the exact number of items doesn't make a scrollbar
             appears. We could also enforce that by passing a flag to BeginChild().         */
         val size = Vec2(0f, textLineHeightWithSpacing * heightInItemsF + style.itemSpacing.y)
@@ -210,7 +216,6 @@ interface imgui_widgetsSelectableLists {
 
     /** terminate the scrolling region  */
     fun listBoxFooter() {
-
         val parentWindow = parentWindow
         val bb = parentWindow.dc.lastItemRect // assign is safe, itemSize() won't modify bb
 
@@ -222,5 +227,14 @@ interface imgui_widgetsSelectableLists {
         parentWindow.dc.cursorPos put bb.min
         itemSize(bb, style.framePadding.y)
         endGroup()
+    }
+
+    companion object {
+        //        var i0 = 0
+//        var b0 = false
+        inline fun <R> withBool(block: (KMutableProperty0<Boolean>) -> R): R {
+            Ref.bPtr++
+            return block(Ref::bool).also { Ref.bPtr-- }
+        }
     }
 }

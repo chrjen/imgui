@@ -1,6 +1,7 @@
 package imgui.imgui
 
 import gli_.hasnt
+import glm_.f
 import glm_.glm
 import glm_.i
 import glm_.vec2.Vec2
@@ -76,6 +77,8 @@ interface imgui_cursorLayout {
      *      posX != 0      : align to specified x position (relative to window/group left)
      *      spacingW < 0   : use default spacing if posX == 0, no spacing if posX != 0
      *      spacingW >= 0  : enforce spacing amount    */
+    fun sameLine(posX: Int) = sameLine(posX.f)
+    fun sameLine(posX: Int, spacingW: Int) = sameLine(posX.f, spacingW.f)
     fun sameLine(posX: Float = 0f, spacingW: Float = -1f) {
 
         val window = currentWindow
@@ -202,7 +205,11 @@ interface imgui_cursorLayout {
         //window->DrawList->AddRect(groupBb.Min, groupBb.Max, IM_COL32(255,0,255,255));   // [Debug]
     }
 
-    /** cursor position is relative to window position  */
+    /** Cursor position is relative to window position
+     *  User generally sees positions in window coordinates. Internally we store CursorPos in absolute screen coordinates
+     *  because it is more convenient.
+     *  Conversion happens as we pass the value to user, but it makes our naming convention confusing because
+     *  cursorPos == dc.cursorPos - window.pos. May want to rename 'dc.cursorPos'.  */
     var cursorPos
         get() = with(currentWindowRead!!) { dc.cursorPos - pos + scroll }
         set(value) = with(currentWindowRead!!) {
@@ -230,11 +237,11 @@ interface imgui_cursorLayout {
     val cursorStartPos get() = with(currentWindowRead!!) { dc.cursorStartPos - pos }
 
     /** cursor position in absolute screen coordinates [0..io.DisplaySize] (useful to work with ImDrawList API) */
-    var cursorScreenPos
+    var cursorScreenPos // TODO check no put(), otherwise it doesnt trigger the setter
         get() = currentWindowRead!!.dc.cursorPos
-        set(value) = with(currentWindowRead!!.dc) {
+        set(value) = with(currentWindow.dc) {
             cursorPos put value
-            cursorPos max_ cursorMaxPos
+            cursorMaxPos max_ cursorPos
         }
 
     /** Vertically align/lower upcoming text to framePadding.y so that it will aligns to upcoming widgets

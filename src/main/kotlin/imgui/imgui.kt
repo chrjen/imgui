@@ -61,11 +61,19 @@ var debug = 0
 var ptrIndices = 0 // TODO move
 
 
+// TODO solve everywhere this bug
+/*
+    valueChanged = valueChanged || sliderInt("##v", int, vMin, vMax, displayFormat)
+    =
+    val res = sliderInt("##v", int, vMin, vMax, displayFormat)
+    valueChanged = valueChanged || res
+*/
+
+// TODO get rid of local top value KMutableProperty in favor of the better with*{} solution
+
 typealias SizeConstraintCallback = (userData: Any?, pos: Vec2i, currenSize: Vec2, desiredSize: Vec2) -> Unit
 
 // dummy main
 fun main(args: Array<String>) {
 
 }
-
-operator fun KMutableProperty0<Boolean>.invoke() = 3
