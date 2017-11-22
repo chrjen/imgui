@@ -1,6 +1,8 @@
 package imgui
 
+import glm_.f
 import glm_.vec2.Vec2
+import glm_.vec4.Vec4
 import imgui.ImGui._begin
 import imgui.ImGui.beginChild
 import imgui.ImGui.beginGroup
@@ -8,10 +10,12 @@ import imgui.ImGui.beginMainMenuBar
 import imgui.ImGui.beginMenu
 import imgui.ImGui.beginMenuBar
 import imgui.ImGui.beginPopup
+import imgui.ImGui.beginPopupContextItem
 import imgui.ImGui.beginPopupContextWindow
 import imgui.ImGui.beginPopupModal
 import imgui.ImGui.beginTooltip
 import imgui.ImGui.collapsingHeader
+import imgui.ImGui.combo
 import imgui.ImGui.end
 import imgui.ImGui.endChild
 import imgui.ImGui.endGroup
@@ -20,17 +24,22 @@ import imgui.ImGui.endMenu
 import imgui.ImGui.endMenuBar
 import imgui.ImGui.endPopup
 import imgui.ImGui.endTooltip
+import imgui.ImGui.indent
 import imgui.ImGui.menuItem
 import imgui.ImGui.popId
 import imgui.ImGui.popItemWidth
+import imgui.ImGui.popStyleColor
 import imgui.ImGui.popStyleVar
 import imgui.ImGui.popTextWrapPos
 import imgui.ImGui.pushId
 import imgui.ImGui.pushItemWidth
+import imgui.ImGui.pushStyleColor
 import imgui.ImGui.pushStyleVar
 import imgui.ImGui.pushTextWrapPos
+import imgui.ImGui.selectable
 import imgui.ImGui.treeNode
 import imgui.ImGui.treePop
+import imgui.ImGui.unindent
 import kotlin.reflect.KMutableProperty0
 
 object functionalProgramming {
@@ -82,8 +91,7 @@ object functionalProgramming {
     }
 
     inline fun collapsingHeader(label: String, flags: Int = 0, block: () -> Unit) {
-        if (collapsingHeader(label, flags))
-            block()
+        if (collapsingHeader(label, flags)) block()
     }
 
     inline fun collapsingHeader(label: String, open: KMutableProperty0<Boolean>, flags: Int = 0, block: () -> Unit) {
@@ -131,6 +139,7 @@ object functionalProgramming {
         popStyleVar()
     }
 
+    inline fun withItemWidth(itemWidth: Int, block: () -> Unit) = withItemWidth(itemWidth.f, block)
     inline fun withItemWidth(itemWidth: Float, block: () -> Unit) {
         pushItemWidth(itemWidth)
         block()
@@ -174,10 +183,75 @@ object functionalProgramming {
         endGroup()
     }
 
+    inline fun withStyleColor(idx: Col, col: Vec4, block: () -> Unit) {
+        pushStyleColor(idx, col)
+        block()
+        popStyleColor()
+    }
+
+    inline fun withStyleColor(idx0: Col, col0: Vec4, idx1: Col, col1: Vec4, block: () -> Unit) {
+        pushStyleColor(idx0, col0)
+        pushStyleColor(idx1, col1)
+        block()
+        popStyleColor(2)
+    }
+
+    inline fun withStyleColor(idx0: Col, col0: Vec4, idx1: Col, col1: Vec4, idx2: Col, col2: Vec4, block: () -> Unit) {
+        pushStyleColor(idx0, col0)
+        pushStyleColor(idx1, col1)
+        pushStyleColor(idx2, col2)
+        block()
+        popStyleColor(3)
+    }
+
+    inline fun withStyleColor(idx0: Col, col0: Vec4, idx1: Col, col1: Vec4, idx2: Col, col2: Vec4, idx3: Col, col3: Vec4,
+                              block: () -> Unit) {
+        pushStyleColor(idx0, col0)
+        pushStyleColor(idx1, col1)
+        pushStyleColor(idx2, col2)
+        pushStyleColor(idx3, col3)
+        block()
+        popStyleColor(4)
+    }
+
+    inline fun withStyleColor(idx0: Col, col0: Vec4, idx1: Col, col1: Vec4, idx2: Col, col2: Vec4, idx3: Col, col3: Vec4,
+                              idx4: Col, col4: Vec4, block: () -> Unit) {
+        pushStyleColor(idx0, col0)
+        pushStyleColor(idx1, col1)
+        pushStyleColor(idx2, col2)
+        pushStyleColor(idx3, col3)
+        pushStyleColor(idx4, col4)
+        block()
+        popStyleColor(5)
+    }
+
     inline fun popup(strId: String, block: () -> Unit) {
         if (beginPopup(strId)) {
             block()
             endPopup()
         }
+    }
+
+    inline fun popupContextItem(strId: String = "", block: () -> Unit) {
+        if (beginPopupContextItem(strId)) {
+            block()
+            endPopup()
+        }
+    }
+
+    inline fun selectable(label: String, selected: Boolean = false, flags: Int = 0, sizeArg: Vec2 = Vec2(), block: () -> Unit) {
+        if (selectable(label, selected, flags, sizeArg)) block()
+    }
+
+    inline fun withIndent(indentW: Float = 0f, block: () -> Unit) {
+        indent(indentW)
+        block()
+        unindent(indentW)
+    }
+
+    inline fun combo(label: String, currentItem: KMutableProperty0<Int>, itemsSeparatedByZeros: String, heightInItems: Int = -1,
+                     block: () -> Unit) {
+        if (combo(label, currentItem, itemsSeparatedByZeros, heightInItems))
+            block()
     }
 }

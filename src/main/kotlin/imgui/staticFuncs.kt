@@ -67,6 +67,7 @@ fun createNewWindow(name: String, size: Vec2, flags: Int) = Window(name).apply {
     // Create window the first time
 
     this.flags = flags
+    g.windowsById[id] = this
 
     if (flags has Wf.NoSavedSettings) {
         // User can disable loading and saving of settings. Tooltip and child windows also don't store settings.
@@ -82,11 +83,8 @@ fun createNewWindow(name: String, size: Vec2, flags: Int) = Window(name).apply {
         var settings = findWindowSettings(name)
         if (settings == null)
             settings = addWindowSettings(name)
-        else {
-            setWindowPosAllowFlags = setWindowPosAllowFlags wo Cond.FirstUseEver
-            setWindowSizeAllowFlags = setWindowSizeAllowFlags wo Cond.FirstUseEver
-            setWindowCollapsedAllowFlags = setWindowCollapsedAllowFlags wo Cond.FirstUseEver
-        }
+        else
+            setConditionAllowFlags(Cond.FirstUseEver.i, false)
 
         if (settings.pos.x != Int.MAX_VALUE) {
             posF put settings.pos

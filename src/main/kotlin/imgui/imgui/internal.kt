@@ -68,6 +68,7 @@ import imgui.imgui.imgui_colums.Companion.pixelsToOffsetNorm
 import imgui.internal.*
 import java.util.*
 import kotlin.apply
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.reflect.KMutableProperty0
 import imgui.ColorEditFlags as Cef
@@ -103,7 +104,7 @@ interface imgui_internal {
 
     val currentWindowRead get() = g.currentWindow
 
-    val currentWindow get() = g.currentWindow!!.apply { accessed = true }
+    val currentWindow get() = g.currentWindow!!.apply { writeAccessed = true }
 
     val parentWindow: Window
         get() {
@@ -111,11 +112,7 @@ interface imgui_internal {
             return g.currentWindowStack[g.currentWindowStack.size - 2]
         }
 
-    fun findWindowByName(name: String): Window? {
-        // FIXME-OPT: Store sorted hashes -> pointers so we can do a bissection in a contiguous block
-        val id = hash(name, 0)
-        return g.windows.firstOrNull { it.id == id }
-    }
+    fun findWindowByName(name: String) = g.windowsById[hash(name, 0)]
 
     fun initialize() {
 
@@ -126,85 +123,9 @@ interface imgui_internal {
         g.initialized = true
     }
 
-    /** Ends the ImGui frame. Automatically called by Render()! you most likely don't need to ever call that yourself
-     *  directly. If you don't need to render you can call EndFrame() but you'll have wasted CPU already. If you don't
-     *  need to render, don't create any windows instead!
-     *
-     *  This is normally called by Render(). You may want to call it directly if you want to avoid calling Render() but
-     *  the gain will be very minimal.  */
-    fun endFrame() {
-
-        assert(g.initialized)                       // Forgot to call ImGui::NewFrame()
-        assert(g.frameCountEnded != g.frameCount)   // ImGui::EndFrame() called multiple times, or forgot to call ImGui::NewFrame() again
-
-        // Notify OS when our Input Method Editor cursor has moved (e.g. CJK inputs using Microsoft IME)
-//        if (IO.imeSetInputScreenPosFn && ImLengthSqr(g.OsImePosRequest - g.OsImePosSet) > 0.0001f) { TODO
-//            g.IO.ImeSetInputScreenPosFn((int) g . OsImePosRequest . x, (int) g . OsImePosRequest . y)
-//            g.OsImePosSet = g.OsImePosRequest
-//        }
-
-        // Hide implicit "Debug" window if it hasn't been used
-        assert(g.currentWindowStack.size == 1)    // Mismatched Begin()/End() calls
-        g.currentWindow?.let {
-            if (!it.accessed) it.active = false
-        }
-
-        end()
-
-        if (g.activeId == 0 && g.hoveredId == 0)
-            if (g.navWindow == null || !g.navWindow!!.appearing) { // Unless we just made a window/popup appear
-                // Click to focus window and start moving (after we're done with all our widgets)
-                if (IO.mouseClicked[0])
-                    if (g.hoveredRootWindow != null) {
-                        g.hoveredWindow.focus()
-                        if (g.hoveredWindow!!.flags hasnt Wf.NoMove && g.hoveredRootWindow!!.flags hasnt Wf.NoMove) {
-                            g.movingWindow = g.hoveredWindow
-                            g.movingdWindowMoveId = g.hoveredWindow!!.moveId
-                            setActiveId(g.movingdWindowMoveId, g.hoveredRootWindow)
-                        }
-                    } else if (g.navWindow != null && frontMostModalRootWindow == null)
-                        null.focus()   // Clicking on void disable focus
-
-                /*  With right mouse button we close popups without changing focus
-                (The left mouse button path calls FocusWindow which will lead NewFrame->CloseInactivePopups to trigger) */
-                if (IO.mouseClicked[1]) {
-                    /*  Find the top-most window between HoveredWindow and the front most Modal Window.
-                        This is where we can trim the popup stack.  */
-                    val modal = frontMostModalRootWindow
-                    var hoveredWindowAboveModal = false
-                    if (modal == null)
-                        hoveredWindowAboveModal = true
-                    var i = g.windows.lastIndex
-                    while (i >= 0 && !hoveredWindowAboveModal) {
-                        val window = g.windows[i]
-                        if (window === modal) break
-                        if (window === g.hoveredWindow) hoveredWindowAboveModal = true
-                        i--
-                    }
-                    closeInactivePopups(if (hoveredWindowAboveModal) g.hoveredWindow else modal)
-                }
-            }
-
-        /*  Sort the window list so that all child windows are after their parent
-            We cannot do that on FocusWindow() because childs may not exist yet         */
-        g.windowsSortBuffer.clear()
-        g.windows.forEach {
-            if (!it.active || it.flags hasnt Wf.ChildWindow)  // if a child is active its parent will add it
-                it.addToSortedBuffer()
-        }
-        assert(g.windows.size == g.windowsSortBuffer.size)  // we done something wrong
-        g.windows.clear()
-        g.windows.addAll(g.windowsSortBuffer)
-
-        // Clear Input data for next frame
-        IO.mouseWheel = 0f
-        IO.inputCharacters.fill('\u0000')
-
-        g.frameCountEnded = g.frameCount
-    }
-
     fun setActiveId(id: Int, window: Window?) {
-        g.activeIdIsJustActivated = (g.activeId != id)
+        g.activeIdIsJustActivated = g.activeId != id
+        if (g.activeIdIsJustActivated) g.activeIdTimer = 0f
         g.activeId = id
         g.activeIdAllowOverlap = false
         g.activeIdIsAlive = g.activeIdIsAlive || id != 0
@@ -216,6 +137,7 @@ interface imgui_internal {
     fun setHoveredId(id: Int) {
         g.hoveredId = id
         g.hoveredIdAllowOverlap = false
+        g.hoveredIdTimer = if (id != 0 && g.hoveredIdPreviousFrame == id) g.hoveredIdTimer + IO.deltaTime else 0f
     }
 
     fun keepAliveId(id: Int) {
@@ -410,13 +332,11 @@ interface imgui_internal {
 
     fun beginPopupEx(id: Int, extraFlags: Int): Boolean {
 
-        val window = g.currentWindow!!
         if (!isPopupOpen(id)) {
             clearSetNextWindowData() // We behave like Begin() and need to consume those values
             return false
         }
 
-        pushStyleVar(StyleVar.WindowRounding, 0f)
         val flags = extraFlags or Wf.Popup or Wf.NoTitleBar or Wf.NoResize or Wf.NoSavedSettings
 
         val name =
@@ -426,9 +346,7 @@ interface imgui_internal {
                     "##popup_%08x".format(style.locale, id)     // Not recycling, so we can close/open during the same frame
 
         val isOpen = begin(name, null, flags)
-        if (window.flags hasnt Wf.ShowBorders)
-            g.currentWindow!!.flags = g.currentWindow!!.flags and Wf.ShowBorders.i.inv()
-        if (!isOpen) // NB: isOpen can be 'false' when the popup is completely clipped (e.g. zero size display)
+        if (!isOpen) // NB: Begin can return false when the popup is completely clipped (e.g. zero size display)
             endPopup()
 
         return isOpen
@@ -478,7 +396,7 @@ interface imgui_internal {
         val otherScrollbar = if (horizontal) window.scrollbar.y else window.scrollbar.x
         val otherScrollbarSizeW = if (otherScrollbar) style.scrollbarSize else 0f
         val windowRect = window.rect()
-        val borderSize = window.borderSize
+        val borderSize = window.windowBorderSize
         val bb =
                 if (horizontal)
                     Rect(window.pos.x + borderSize, windowRect.max.y - style.scrollbarSize,
@@ -490,7 +408,6 @@ interface imgui_internal {
             bb.min.y += window.titleBarHeight + if (window.flags has Wf.MenuBar) window.menuBarHeight else 0f
         if (bb.width <= 0f || bb.height <= 0f) return
 
-        val windowRounding = if (window.flags has Wf.ChildWindow) style.childWindowRounding else style.windowRounding
         val windowRoundingCorners =
                 if (horizontal)
                     Corner.BotLeft or if (otherScrollbar) Corner.All else Corner.BotRight
@@ -499,10 +416,10 @@ interface imgui_internal {
                             if (window.flags has Wf.NoTitleBar && window.flags hasnt Wf.MenuBar)
                                 Corner.TopRight
                             else Corner.All) or if (otherScrollbar) Corner.All else Corner.BotRight
-        window.drawList.addRectFilled(bb.min, bb.max, Col.ScrollbarBg.u32, windowRounding, windowRoundingCorners)
+        window.drawList.addRectFilled(bb.min, bb.max, Col.ScrollbarBg.u32, window.windowRounding, windowRoundingCorners)
         bb.expand(Vec2(
-                -glm.clamp(((bb.max.x - bb.min.x - 2.0f) * 0.5f).i.f, 0.0f, 3.0f),
-                -glm.clamp(((bb.max.y - bb.min.y - 2.0f) * 0.5f).i.f, 0.0f, 3.0f)))
+                -glm.clamp(((bb.max.x - bb.min.x - 2f) * 0.5f).i.f, 0f, 3f),
+                -glm.clamp(((bb.max.y - bb.min.y - 2f) * 0.5f).i.f, 0f, 3f)))
 
         // V denote the main, longer axis of the scrollbar (= height for a vertical scrollbar)
         val scrollbarSizeV = if (horizontal) bb.width else bb.height
@@ -570,16 +487,14 @@ interface imgui_internal {
 
         // Render
         val grabCol = (if (held) Col.ScrollbarGrabActive else if (hovered) Col.ScrollbarGrabHovered else Col.ScrollbarGrab).u32
-        if (horizontal)
-            window.drawList.addRectFilled(
-                    Vec2(lerp(bb.min.x, bb.max.x, grabVNorm), bb.min.y),
-                    Vec2(lerp(bb.min.x, bb.max.x, grabVNorm) + grabHPixels, bb.max.y),
-                    grabCol, style.scrollbarRounding)
-        else
-            window.drawList.addRectFilled(
-                    Vec2(bb.min.x, lerp(bb.min.y, bb.max.y, grabVNorm)),
-                    Vec2(bb.max.x, lerp(bb.min.y, bb.max.y, grabVNorm) + grabHPixels),
-                    grabCol, style.scrollbarRounding)
+        val grabRect =
+                if (horizontal)
+                    Rect(lerp(bb.min.x, bb.max.x, grabVNorm), bb.min.y,
+                            min(lerp(bb.min.x, bb.max.x, grabVNorm) + grabHPixels, windowRect.max.x), bb.max.y)
+                else
+                    Rect(bb.min.x, lerp(bb.min.y, bb.max.y, grabVNorm),
+                            bb.max.x, min(lerp(bb.min.y, bb.max.y, grabVNorm) + grabHPixels, windowRect.max.y))
+        window.drawList.addRectFilled(grabRect.min, grabRect.max, grabCol, style.scrollbarRounding)
     }
 
     /** Vertical separator, for menu bars (use current line height). not exposed because it is misleading
@@ -601,7 +516,7 @@ interface imgui_internal {
     // FIXME-WIP: New Columns API
 
     /** setup number of columns. use an identifier to distinguish multiple column sets. close with EndColumns().    */
-    fun beginColumns(id: String?, columnsCount: Int, flags: Int) {
+    fun beginColumns(id: String = "", columnsCount: Int, flags: Int) {
 
         with(currentWindow) {
 
@@ -612,8 +527,8 @@ interface imgui_internal {
                 as another widget.
                 In addition, when an identifier isn't explicitly provided we include the number of columns in the hash
                 to make it uniquer. */
-            pushId(0x11223347 + if (id != null) 0 else columnsCount)
-            dc.columnsSetId = getId(id ?: "columns")
+            pushId(0x11223347 + if (id.isNotEmpty()) 0 else columnsCount)
+            dc.columnsSetId = getId(if (id.isEmpty()) "columns" else id)
             popId()
 
             // Set state for first column
@@ -668,7 +583,8 @@ interface imgui_internal {
 
         dc.columnsCellMaxY = glm.max(dc.columnsCellMaxY, dc.cursorPos.y)
         dc.cursorPos.y = dc.columnsCellMaxY
-        dc.cursorMaxPos.x = glm.max(dc.columnsStartMaxPosX, dc.columnsMaxX)  // Columns don't grow parent
+        if (dc.columnsFlags hasnt ColumnsFlags.GrowParentContentsSize)
+            dc.cursorMaxPos.x = max(dc.columnsStartMaxPosX, dc.columnsMaxX) // Restore cursor max pos, as columns don't grow parent
 
         // Draw columns borders and handle resize
         if (dc.columnsFlags hasnt ColumnsFlags.NoBorder && !skipItems) {
@@ -680,8 +596,8 @@ interface imgui_internal {
 
                 val x = pos.x + getColumnOffset(i)
                 val columnId = dc.columnsSetId + i
-                val columnW = 4f // Width for interaction
-                val columnRect = Rect(x - columnW, y1, x + columnW, y2)
+                val columnHw = 4f // Half-width for interaction
+                val columnRect = Rect(x - columnHw, y1, x + columnHw, y2)
                 if (isClippedEx(columnRect, columnId, false)) continue
 
                 var hovered = false
@@ -696,7 +612,7 @@ interface imgui_internal {
                     if (held && g.activeIdIsJustActivated)
                     /*  Store from center of column line (we used a 8 wide rect for columns clicking). This is used by
                         GetDraggedColumnOffset().                     */
-                        g.activeIdClickOffset.x -= columnW
+                        g.activeIdClickOffset.x -= columnHw
                     if (held)
                         draggingColumn = i
                 }
@@ -704,7 +620,7 @@ interface imgui_internal {
                 // Draw column
                 val col = getColorU32(if (held) Col.SeparatorActive else if (hovered) Col.SeparatorHovered else Col.Separator)
                 val xi = x.i.f
-                drawList.addLine(Vec2(xi, y1 + 1f), Vec2(xi, y2), col)
+                drawList.addLine(Vec2(xi, max(y1 + 1f, clipRect.min.y)), Vec2(xi, min(y2, clipRect.max.y)), col)
             }
 
             // Apply dragging after drawing the column lines, so our rendered lines are in sync with how items were displayed during the frame.
@@ -809,16 +725,18 @@ interface imgui_internal {
         val window = g.currentWindow!!
 
         window.drawList.addRectFilled(pMin, pMax, fillCol, rounding)
-        if (border && window.flags has Wf.ShowBorders) {
-            window.drawList.addRect(pMin + 1, pMax + 1, Col.BorderShadow.u32, rounding)
-            window.drawList.addRect(pMin, pMax, Col.Border.u32, rounding)
+        val borderSize = style.frameBorderSize
+        if (border && borderSize > 0f) {
+            window.drawList.addRect(pMin + 1, pMax + 1, Col.BorderShadow.u32, rounding, 0.inv(), borderSize)
+            window.drawList.addRect(pMin, pMax, Col.Border.u32, rounding, 0.inv(), borderSize)
         }
     }
 
     fun renderFrameBorder(pMin: Vec2, pMax: Vec2, rounding: Float = 0f) = with(g.currentWindow!!) {
-        if (flags has Wf.ShowBorders) {
-            drawList.addRect(pMin + 1, pMax + 1, Col.BorderShadow.u32, rounding)
-            drawList.addRect(pMin, pMax, Col.Border.u32, rounding)
+        val borderSize = style.frameBorderSize
+        if (borderSize > 0f) {
+            drawList.addRect(pMin + 1, pMax + 1, Col.BorderShadow.u32, rounding, 0.inv(), borderSize)
+            drawList.addRect(pMin, pMax, Col.Border.u32, rounding, 0.inv(), borderSize)
         }
     }
 
@@ -889,6 +807,7 @@ interface imgui_internal {
                 c = Vec2(+0.866f, -0.5f) * r
             }
             Dir.Left, Dir.Right -> {
+                center.x -= r * 0.25f
                 if (dir == Dir.Left) r = -r
                 a = Vec2(1, 0) * r
                 b = Vec2(-0.500f, +0.866f) * r
@@ -1003,6 +922,12 @@ interface imgui_internal {
         var hovered = itemHoverable(bb, id)
         if (flags has Bf.FlattenChilds && g.hoveredRootWindow === window)
             g.hoveredWindow = backupHoveredWindow
+
+        /*  AllowOverlap mode (rarely used) requires previous frame hoveredId to be null or to match. This allows using
+            patterns where a later submitted widget overlaps a previous one.         */
+        if (hovered && flags has Bf.AllowOverlapMode && g.hoveredIdPreviousFrame != id && g.hoveredIdPreviousFrame != 0)
+            hovered = false
+
         if (hovered) {
             if (flags hasnt Bf.NoKeyModifiers || (!IO.keyCtrl && !IO.keyShift && !IO.keyAlt)) {
 
@@ -1019,10 +944,13 @@ interface imgui_internal {
                 }
                 if ((flags has Bf.PressedOnClick && IO.mouseClicked[0]) || (flags has Bf.PressedOnDoubleClick && IO.mouseDoubleClicked[0])) {
                     pressed = true
-                    if (flags has Bf.NoHoldingActiveID) clearActiveId()
-                    else setActiveId(id, window) // Hold on ID
+                    if (flags has Bf.NoHoldingActiveID)
+                        clearActiveId()
+                    else {
+                        setActiveId(id, window) // Hold on ID
+                        g.activeIdClickOffset = IO.mousePos - bb.min
+                    }
                     window.focus()
-                    g.activeIdClickOffset = IO.mousePos - bb.min
                 }
                 if (flags has Bf.PressedOnRelease && IO.mouseReleased[0]) {
                     // Repeat mode trumps <on release>
@@ -1049,13 +977,6 @@ interface imgui_internal {
                         pressed = true
                 clearActiveId()
             }
-        /*  AllowOverlap mode (rarely used) requires previous frame HoveredId to be null or to match. This allows using
-        patterns where a later submitted widget overlaps a previous one.    */
-        if (hovered && flags has Bf.AllowOverlapMode && (g.hoveredIdPreviousFrame != id && g.hoveredIdPreviousFrame != 0)) {
-            held = false
-            pressed = false
-            hovered = false
-        }
         return booleanArrayOf(pressed, hovered, held)
     }
 
@@ -1117,6 +1038,25 @@ interface imgui_internal {
             window.drawList.addLine(center + Vec2(crossExtent, -crossExtent), center + Vec2(-crossExtent, crossExtent), Col.Text.u32)
         }
 
+        return pressed
+    }
+
+    /** [Internal]
+     *  @param flags: ButtonFlags */
+    fun arrowButton(id: Int, dir: Dir, padding: Vec2, flags: Int = 0): Boolean {
+        val window = g.currentWindow!!
+        if (window.skipItems) return false
+
+        val bb = Rect(window.dc.cursorPos, window.dc.cursorPos + g.fontSize + padding * 2f)
+        itemSize(bb, style.framePadding.y)
+        if (!itemAdd(bb, id)) return false
+
+        val (pressed, hovered, held) = buttonBehavior(bb, id, flags)
+
+        val col = (if (hovered && held) Col.ButtonActive else if (hovered) Col.ButtonHovered else Col.Button).u32
+        if (IMGUI_HAS_NAV) TODO() //renderNavHighlight(bb, id)
+        renderFrame(bb.min, bb.max, col, true, style.frameRounding)
+        renderTriangle(bb.min + padding, dir, 1f)
         return pressed
     }
 
@@ -1584,7 +1524,7 @@ interface imgui_internal {
                     else g.fontSize * 0.5f
 
             // OS X style: Double click selects by word instead of selecting whole text
-            val osxDoubleClickSelectsWords = IO.osxBehaviors
+            val osxDoubleClickSelectsWords = IO.optMacOSXBehaviors
             if (selectAll || (hovered && !osxDoubleClickSelectsWords && IO.mouseDoubleClicked[0])) {
                 editState.selectAll()
                 editState.selectedAllMouseLock = true
@@ -1630,12 +1570,12 @@ interface imgui_internal {
             // Handle key-presses
             val kMask = if (IO.keyShift) K.SHIFT else 0
             // OS X style: Shortcuts using Cmd/Super instead of Ctrl
-            val superCtrl = if (IO.osxBehaviors) IO.keySuper && !IO.keyCtrl else IO.keyCtrl && !IO.keySuper
+            val superCtrl = if (IO.optMacOSXBehaviors) IO.keySuper && !IO.keyCtrl else IO.keyCtrl && !IO.keySuper
             val isShortcutKeyOnly = superCtrl && !IO.keyAlt && !IO.keyShift
             // OS X style: Text editing cursor movement using Alt instead of Ctrl
-            val isWordmoveKeyDown = if (IO.osxBehaviors) IO.keyAlt else IO.keyCtrl
+            val isWordmoveKeyDown = if (IO.optMacOSXBehaviors) IO.keyAlt else IO.keyCtrl
             // OS X style: Line/Text Start and End using Cmd+Arrows instead of Home/End
-            val isStartendKeyDown = IO.osxBehaviors && IO.keySuper && !IO.keyCtrl && !IO.keyAlt
+            val isStartendKeyDown = IO.optMacOSXBehaviors && IO.keySuper && !IO.keyCtrl && !IO.keyAlt
 
             when {
                 Key.LeftArrow.isPressed -> editState.onKeyPressed(
@@ -1667,7 +1607,7 @@ interface imgui_internal {
                     if (!editState.hasSelection) {
                         if (isWordmoveKeyDown)
                             editState.onKeyPressed(K.WORDLEFT or K.SHIFT)
-                        else if (IO.osxBehaviors && IO.keySuper && !IO.keyAlt && !IO.keyCtrl)
+                        else if (IO.optMacOSXBehaviors && IO.keySuper && !IO.keyAlt && !IO.keyCtrl)
                             editState.onKeyPressed(K.LINESTART or K.SHIFT)
                     }
                     editState.onKeyPressed(K.BACKSPACE or kMask)
@@ -2011,7 +1951,7 @@ interface imgui_internal {
                     editState.curLenA, 0f, if (isMultiline) null else clipRect)
 
             // Draw blinking cursor
-            val cursorIsVisible = g.inputTextState.cursorAnim <= 0f || glm.mod(g.inputTextState.cursorAnim, 1.2f) <= 0.8f
+            val cursorIsVisible = !IO.optCursorBlink || g.inputTextState.cursorAnim <= 0f || glm.mod(g.inputTextState.cursorAnim, 1.2f) <= 0.8f
             val cursorScreenPos = renderPos + cursorOffset - renderScroll
             val cursorScreenRect = Rect(cursorScreenPos.x, cursorScreenPos.y - g.fontSize + 0.5f, cursorScreenPos.x + 1f, cursorScreenPos.y - 1.5f)
             if (cursorIsVisible && cursorScreenRect overlaps Rect(clipRect))
@@ -2200,7 +2140,7 @@ interface imgui_internal {
             textUnformatted(text, textEnd)
             separator()
         }
-        val sz = Vec2(g.fontSize * 3)
+        val sz = Vec2(g.fontSize * 3 + style.framePadding.y * 2)
         val f = (flags and (Cef.NoAlpha or Cef.AlphaPreview or Cef.AlphaPreviewHalf)) or Cef.NoTooltip
         colorButton("##preview", Vec4(col), f, sz)
         sameLine()
@@ -2593,12 +2533,12 @@ interface imgui_internal {
 
         val smallSquareSize get() = g.fontSize + style.framePadding.y * 2f
 
-        private var f0 = 0f
+        private var f0 = 0f // TODO remove
         private var i0 = 0
     }
 }
 
-inline fun <R> withFloat(floats: FloatArray, ptr: Int, block: (KMutableProperty0<Float>) -> R): R {
+private inline fun <R> withFloat(floats: FloatArray, ptr: Int, block: (KMutableProperty0<Float>) -> R): R {
     Ref.fPtr++
     val f = Ref::float
     f.set(floats[ptr])
@@ -2608,7 +2548,7 @@ inline fun <R> withFloat(floats: FloatArray, ptr: Int, block: (KMutableProperty0
     return res
 }
 
-inline fun <R> withInt(ints: IntArray, ptr: Int, block: (KMutableProperty0<Int>) -> R): R {
+private inline fun <R> withInt(ints: IntArray, ptr: Int, block: (KMutableProperty0<Int>) -> R): R {
     Ref.iPtr++
     val i = Ref::int
     i.set(ints[ptr])
@@ -2618,7 +2558,7 @@ inline fun <R> withInt(ints: IntArray, ptr: Int, block: (KMutableProperty0<Int>)
     return res
 }
 
-inline fun <R> withInt(block: (KMutableProperty0<Int>) -> R): R {
+private inline fun <R> withInt(block: (KMutableProperty0<Int>) -> R): R {
     Ref.iPtr++
     return block(Ref::int).also { Ref.iPtr-- }
 }

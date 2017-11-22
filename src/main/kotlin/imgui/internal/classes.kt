@@ -14,9 +14,10 @@ import imgui.ImGui.clearActiveId
 import imgui.ImGui.keepAliveId
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.math.max
 import imgui.Context as g
-import imgui.WindowFlags as Wf
 import imgui.HoveredFlags as Hf
+import imgui.WindowFlags as Wf
 
 /** 2D axis aligned bounding-box
 NB: we can't rely on ImVec2 math operators being available here */
@@ -376,9 +377,12 @@ class Window(
     /** Maximum visible content position in window coordinates.
     ~~ (SizeContentsExplicit ? SizeContentsExplicit : Size - ScrollbarSizes) - CursorStartPos, per axis */
     var contentsRegionRect = Rect()
-    /** Window padding at the time of begin. We need to lock it, in particular manipulation of the ShowBorder would have
-    effect  */
+    /** Window padding at the time of begin. */
     var windowPadding = Vec2()
+    /** Window rounding at the time of begin.   */
+    var windowRounding = 0f
+    /** Window border size at the time of begin.    */
+    var windowBorderSize = 0f
     /** == window->GetID("#MOVE")   */
     var moveId: Int
 
@@ -399,13 +403,15 @@ class Window(
 
     var wasActive = false
     /** Set to true when any widget access the current window   */
-    var accessed = false
+    var writeAccessed = false
     /** Set when collapsing window to become only title-bar */
     var collapsed = false
     /** Set when items can safely be all clipped (e.g. window not visible or collapsed) */
     var skipItems = false
     /** Set during the frame where the window is appearing (or re-appearing)    */
     var appearing = false
+    /** Set when the window has a close button (p_open != NULL) */
+    var closeButton = false
     /** Number of Begin() during the current frame (generally 0 or 1, 1+ if appending via multiple Begin/End pairs) */
     var beginCount = 0
     /** ID in the popup stack when this window is used as a popup/menu (because we use generic Name/ID for recycling)   */
@@ -465,7 +471,7 @@ class Window(
     /** Immediate parent in the window stack *regardless* of whether this window is a child window or not)  */
     var parentWindow: Window? = null
     /** Generally point to ourself. If we are a child window, this is pointing to the first non-child parent window.    */
-    lateinit var rootWindow: Window
+    var rootWindow: Window? = null
     /** Generally point to ourself. Used to display TitleBgActive color and for selecting which window to use for NavWindowing  */
     var rootNonPopupWindow: Window? = null
 
@@ -612,8 +618,11 @@ class Window(
                 it(g.setNextWindowSizeConstraintCallbackUserData, pos, sizeFull, newSize)
             }
         }
-        if (flags hasnt (Wf.ChildWindow or Wf.AlwaysAutoResize))
+        if (flags hasnt (Wf.ChildWindow or Wf.AlwaysAutoResize)) {
             newSize max_ style.windowMinSize
+            // Reduce artifacts with very small windows
+            newSize.y = max(newSize.y, titleBarHeight + menuBarHeight + max(0f, style.windowRounding - 1f))
+        }
         return newSize
     }
 
@@ -628,7 +637,7 @@ class Window(
         if (sizeAutoFitAfterConstraint.x < sizeContents.x && flags hasnt Wf.NoScrollbar && flags has Wf.HorizontalScrollbar)
             sizeAutoFit.y += style.scrollbarSize
         if (sizeAutoFitAfterConstraint.y < sizeContents.y && flags hasnt Wf.NoScrollbar)
-            sizeAutoFit.x += style.scrollbarSize * 2f
+            sizeAutoFit.x += style.scrollbarSize
         sizeAutoFit.y = glm.max(sizeAutoFit.y - style.itemSpacing.y, 0f)
         sizeAutoFit
     }
@@ -664,6 +673,35 @@ class Window(
     // FIXME: Add a more explicit sort order in the window structure.
     private val childWindowComparer = compareBy<Window>({ it.flags has Wf.Popup }, { it.flags has Wf.Tooltip },
             { it.flags has Wf.ComboBox }, { it.orderWithinParent })
+
+    fun setConditionAllowFlags(flags: Int, enabled: Boolean) = if (enabled) {
+        setWindowPosAllowFlags = setWindowPosAllowFlags or flags
+        setWindowSizeAllowFlags = setWindowSizeAllowFlags or flags
+        setWindowCollapsedAllowFlags = setWindowCollapsedAllowFlags or flags
+    } else {
+        setWindowPosAllowFlags = setWindowPosAllowFlags wo flags
+        setWindowSizeAllowFlags = setWindowSizeAllowFlags wo flags
+        setWindowCollapsedAllowFlags = setWindowCollapsedAllowFlags wo flags
+    }
+
+    fun bringToFront() {
+        if (g.windows.last() === this) return
+        for (i in 0 until g.windows.size)
+            if (g.windows[i] === this) {
+                g.windows.removeAt(i)
+                g.windows.add(this)
+                break
+            }
+    }
+
+    fun bringToBack() {
+        if (g.windows[0] === this) return
+        for (i in 0 until g.windows.size)
+            if (g.windows[i] === this) {
+                g.windows.removeAt(i)
+                g.windows.add(0, this)
+            }
+    }
 }
 
 /** Moving window to front of display (which happens to be back of our sorted list) */
@@ -675,9 +713,9 @@ fun Window?.focus() {
     // Passing NULL allow to disable keyboard focus
     if (this == null) return
 
-    // And move its root window to the top of the pile
-//    if (window.rootWindow) TODO check
-    val window = rootWindow
+    var window = this
+    // Move the root window to the top of the pile
+    if (rootWindow != null) window = rootWindow!!
 
     // Steal focus on active widgets
     if (window.flags has Wf.Popup) // FIXME: This statement should be unnecessary. Need further testing before removing it..
@@ -685,10 +723,7 @@ fun Window?.focus() {
             clearActiveId()
 
     // Bring to front
-    if ((window.flags has Wf.NoBringToFrontOnFocus) || g.windows.last() === window)
-        return
-    g.windows.remove(window)
-    g.windows.add(window)
+    if (window.flags hasnt Wf.NoBringToFrontOnFocus) window.bringToFront()
 }
 
 /** Backup and restore just enough data to be able to use isItemHovered() on item A after another B in the same window

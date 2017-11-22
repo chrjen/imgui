@@ -20,6 +20,7 @@ enum class WindowFlags(val i: Int) {
     NoCollapse(1 shl 5),
     /** Resize every window to its content every frame  */
     AlwaysAutoResize(1 shl 6),
+    @Deprecated("OBSOLETE! Use e.g. style.FrameBorderSize=1.0f to enable borders")
     /** Show borders around windows and items   */
     ShowBorders(1 shl 7),
     /** Never load/save settings in .ini file   */
@@ -195,6 +196,8 @@ enum class HoveredFlags(val i: Int) {
     AllowWhenBlockedByActiveItem(1 shl 2),
     /** Return true even if the position is overlapped by another window    */
     AllowWhenOverlapped(1 shl 3),
+    /** Treat all child windows as the same window (for isWindowHovered())  */
+    FlattenChilds (1 shl 4),
     RectOnly(AllowWhenBlockedByPopup.i or AllowWhenBlockedByActiveItem.i or AllowWhenOverlapped.i)
 }
 
@@ -264,7 +267,7 @@ enum class Col {
     /** Background of normal windows    */
     WindowBg,
     /** Background of child windows */
-    ChildWindowBg,
+    ChildBg,
     /*-* Background of popups, menus, tooltips windows  */
     PopupBg,
     Border,
@@ -281,7 +284,6 @@ enum class Col {
     ScrollbarGrab,
     ScrollbarGrabHovered,
     ScrollbarGrabActive,
-    ComboBg,
     CheckMark,
     SliderGrab,
     SliderGrabActive,
@@ -306,12 +308,15 @@ enum class Col {
     PlotHistogramHovered,
     TextSelectedBg,
     /** darken entire screen when a modal window is active   */
-    ModalWindowDarkening,
-    COUNT;
+    ModalWindowDarkening;
 
     val i = ordinal
 
     val u32 get() = ImGui.getColorU32(i, alphaMul = 1f)
+
+    companion object {
+        val COUNT = values().size
+    }
 }
 
 /** Enumeration for PushStyleVar() / PopStyleVar() to temporarily modify the ImGuiStyle structure.
@@ -320,21 +325,30 @@ enum class Col {
  *  NB: if changing this enum, you need to update the associated internal table GStyleVarInfo[] accordingly. This is
  *  where we link enum values to members offset/type.   */
 enum class StyleVar {
-
     /** float   */
     Alpha,
     /** vec2    */
     WindowPadding,
     /** float   */
     WindowRounding,
+    /** float */
+    WindowBorderSize,
     /** vec2    */
     WindowMinSize,
     /** float   */
-    ChildWindowRounding,
+    ChildRounding,
+    /** float */
+    ChildBorderSize,
+    /** float */
+    PopupRounding,
+    /** float */
+    PopupBorderSize,
     /** vec2    */
     FramePadding,
     /** float   */
     FrameRounding,
+    /** float   */
+    FrameBorderSize,
     /** vec2    */
     ItemSpacing,
     /** vec2    */

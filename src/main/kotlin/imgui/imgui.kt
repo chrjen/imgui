@@ -4,7 +4,7 @@ import glm_.i
 import glm_.vec2.Vec2
 import glm_.vec2.Vec2i
 import imgui.imgui.*
-import imgui.imgui.demo.imgui_demoDebugInfo
+import imgui.imgui.imgui_demoDebugInfo
 
 // Helpers macros to generate 32-bits encoded colors
 var USE_BGRA_PACKED_COLOR = false
@@ -23,6 +23,8 @@ val COL32_BLACK_TRANS = COL32(0, 0, 0, 0)   // Transparent black = 0x00000000
 var _DEBUG = true
 
 val MOUSE_INVALID = -256000f
+
+var IMGUI_HAS_NAV = false
 
 object ImGui :
 
@@ -53,7 +55,7 @@ object ImGui :
 
         imgui_internal {
 
-    val version = "1.52"
+    val version = "1.53 WIP"
 }
 
 var debug = 0

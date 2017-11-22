@@ -78,7 +78,7 @@ The Immediate Mode GUI paradigm may at first appear unusual to some users. This 
 
 [Gradle, Maven, Sbt, Leiningen](https://jitpack.io/#kotlin-graphics/imgui)
 
-- Add it in your root build.gradle at the end of repositories:
+- Add it in your root `build.gradle` at the end of repositories:
 
 	    allprojects {
 		    repositories {
@@ -102,6 +102,8 @@ Simply follow this [short wiki](https://github.com/kotlin-graphics/imgui/wiki/Us
 
 ### Status:
 
+90% ported, text inputs handling and few other small things
+
 To check what has been already ported and working, simply run one of the tests in Kotlin:
 
 - [lwjgl](https://github.com/kotlin-graphics/imgui/blob/master/src/test/kotlin/imgui/test_lwjgl.kt) 
@@ -110,8 +112,6 @@ To check what has been already ported and working, simply run one of the tests i
 or in Java:
 
 - [lwjgl](https://github.com/kotlin-graphics/imgui/blob/master/src/test/java/imgui/Test_lwjgl.java) 
-
-![Imgur](http://i.imgur.com/0tsoWEP.png)
 
 You should refer to those also to learn how to use the imgui library.
 

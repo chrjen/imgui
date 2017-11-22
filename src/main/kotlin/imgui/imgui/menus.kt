@@ -39,6 +39,7 @@ import imgui.internal.Dir
 import imgui.internal.LayoutType
 import imgui.internal.Rect
 import imgui.internal.triangleContainsPoint
+import kotlin.math.max
 import kotlin.reflect.KMutableProperty0
 import imgui.Context as g
 import imgui.SelectableFlags as Sf
@@ -84,8 +85,8 @@ interface imgui_menus {
         assert(!window.dc.menuBarAppending)
         beginGroup() // Save position
         pushId("##menubar")
-        val rect = Rect(window.menuBarRect())
-        pushClipRect(Vec2(glm.floor(rect.min.x + 0.5f), glm.floor(rect.min.y + window.borderSize + 0.5f)),
+        val rect = Rect(window.menuBarRect()).apply { max.x = max(min.x, max.x - style.windowRounding) }
+        pushClipRect(Vec2(glm.floor(rect.min.x + 0.5f), glm.floor(rect.min.y + window.windowBorderSize + 0.5f)),
                 Vec2(glm.floor(rect.max.x + 0.5f), glm.floor(rect.max.y + 0.5f)), false)
         window.dc.cursorPos = Vec2(rect.min.x + window.dc.menuBarOffsetX, rect.min.y)// + g.style.FramePadding.y);
         window.dc.layoutType = LayoutType.Horizontal
@@ -136,6 +137,7 @@ interface imgui_menus {
         if (window.dc.layoutType == LayoutType.Horizontal) {
             // Menu inside an horizontal menu bar
             // Selectable extend their highlight by half ItemSpacing in each direction.
+            // For ChildMenu, the popup position will be overwritten by the call to findBestPopupWindowPos() in begin()
             popupPos.put(pos.x - window.windowPadding.x, pos.y - style.framePadding.y + window.menuBarHeight)
             window.dc.cursorPos.x += (style.itemSpacing.x * 0.5f).i.f
             pushStyleVar(StyleVar.ItemSpacing, style.itemSpacing * 2f)
@@ -154,7 +156,7 @@ interface imgui_menus {
             val flags = Sf.Menu or Sf.DontClosePopups or Sf.DrawFillAvailWidth
             pressed = selectable(label, menuIsOpen, flags or if (enabled) Sf.Null else Sf.Disabled, Vec2(w, 0f))
             if (!enabled) pushStyleColor(Col.Text, style.colors[Col.TextDisabled])
-            renderTriangle(pos + Vec2(window.menuColumns.pos[2] + extraW + g.fontSize * 0.2f, 0f), Dir.Right)
+            renderTriangle(pos + Vec2(window.menuColumns.pos[2] + extraW + g.fontSize * 0.3f, 0f), Dir.Right)
             if (!enabled) popStyleColor()
         }
 
@@ -218,7 +220,7 @@ interface imgui_menus {
 
         if (menuIsOpen) {
             setNextWindowPos(popupPos, Cond.Always)
-            val flags = Wf.ShowBorders or Wf.AlwaysAutoResize or (
+            val flags = Wf.AlwaysAutoResize or (
                     if (window.flags has (Wf.Popup or Wf.ChildMenu)) Wf.ChildMenu or Wf.ChildWindow
                     else Wf.ChildMenu.i)
             // menuIsOpen can be 'false' when the popup is completely clipped (e.g. zero size display)
@@ -263,8 +265,8 @@ interface imgui_menus {
                 popStyleColor()
             }
             if (selected)
-                renderCheckMark(pos + Vec2(window.menuColumns.pos[2] + extraW + g.fontSize * (0.2f + 0.2f),
-                        g.fontSize * 0.134f * 0.5f), (if (enabled) Col.Text else Col.TextDisabled).u32, g.fontSize * 0.866f)
+                renderCheckMark(pos + Vec2(window.menuColumns.pos[2] + extraW + g.fontSize * 0.4f, g.fontSize * 0.134f * 0.5f),
+                        (if (enabled) Col.Text else Col.TextDisabled).u32, g.fontSize * 0.866f)
         }
         return pressed
     }

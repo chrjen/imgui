@@ -21,6 +21,7 @@ import imgui.ImGui.columns
 import imgui.ImGui.combo
 import imgui.ImGui.cursorScreenPos
 import imgui.ImGui.dragFloat
+import imgui.ImGui.dragInt
 import imgui.ImGui.dummy
 import imgui.ImGui.end
 import imgui.ImGui.endChild
@@ -60,6 +61,9 @@ import imgui.ImGui.sliderInt
 import imgui.ImGui.sliderVec2
 import imgui.ImGui.spacing
 import imgui.ImGui.style
+import imgui.ImGui.styleColorsClassic
+import imgui.ImGui.styleColorsDark
+import imgui.ImGui.styleColorsLight
 import imgui.ImGui.text
 import imgui.ImGui.textUnformatted
 import imgui.ImGui.textWrapped
@@ -71,20 +75,23 @@ import imgui.ImGui.windowDrawList
 import imgui.ImGui.windowWidth
 import imgui.functionalProgramming.button
 import imgui.functionalProgramming.collapsingHeader
+import imgui.functionalProgramming.combo
 import imgui.functionalProgramming.mainMenuBar
 import imgui.functionalProgramming.menu
 import imgui.functionalProgramming.menuBar
 import imgui.functionalProgramming.menuItem
+import imgui.functionalProgramming.popupContextItem
 import imgui.functionalProgramming.popupContextWindow
 import imgui.functionalProgramming.smallButton
 import imgui.functionalProgramming.treeNode
 import imgui.functionalProgramming.window
+import imgui.functionalProgramming.withChild
 import imgui.functionalProgramming.withId
 import imgui.functionalProgramming.withItemWidth
 import imgui.functionalProgramming.withTooltip
 import imgui.functionalProgramming.withWindow
-import imgui.imgui.demo.imgui_demoDebugInfo.Companion.showHelpMarker
-import imgui.imgui.demo.imgui_demoDebugInfo.Companion.showExampleMenuFile
+import imgui.imgui.imgui_demoDebugInfo.Companion.showExampleMenuFile
+import imgui.imgui.imgui_demoDebugInfo.Companion.showHelpMarker
 import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
@@ -118,12 +125,13 @@ object ExampleApp {
     }
 
     var noTitlebar = false
-    var noBorder = true
-    var noResize = false
-    var noMove = false
     var noScrollbar = false
-    var noCollapse = false
     var noMenu = false
+    var noMove = false
+    var noResize = false
+    var noCollapse = false
+
+    var filter = TextFilter()
 
     operator fun invoke(open: KMutableProperty0<Boolean>) {
 
@@ -155,12 +163,11 @@ object ExampleApp {
         // Demonstrate the various window flags. Typically you would just use the default.
         var windowFlags = 0
         if (noTitlebar) windowFlags = windowFlags or Wf.NoTitleBar
-        if (!noBorder) windowFlags = windowFlags or Wf.ShowBorders
-        if (noResize) windowFlags = windowFlags or Wf.NoResize
-        if (noMove) windowFlags = windowFlags or Wf.NoMove
         if (noScrollbar) windowFlags = windowFlags or Wf.NoScrollbar
-        if (noCollapse) windowFlags = windowFlags or Wf.NoCollapse
         if (!noMenu) windowFlags = windowFlags or Wf.MenuBar
+        if (noMove) windowFlags = windowFlags or Wf.NoMove
+        if (noResize) windowFlags = windowFlags or Wf.NoResize
+        if (noCollapse) windowFlags = windowFlags or Wf.NoCollapse
         setNextWindowSize(Vec2(550, 680), Cond.FirstUseEver)
         if (!_begin("ImGui Demo", open, windowFlags)) {
             end()   // Early out if the window is collapsed, as an optimization.
@@ -205,12 +212,11 @@ object ExampleApp {
         collapsingHeader("Window options") {
 
             checkbox("No titlebar", ::noTitlebar); sameLine(150)
-            checkbox("No border", ::noBorder); sameLine(300)
-            checkbox("No resize", ::noResize)
-            checkbox("No move", ::noMove); sameLine(150)
             checkbox("No scrollbar", ::noScrollbar); sameLine(300)
-            checkbox("No collapse", ::noCollapse)
             checkbox("No menu", ::noMenu)
+            checkbox("No move", ::noMove); sameLine(150)
+            checkbox("No resize", ::noResize)
+            checkbox("No collapse", ::noCollapse)
 
             treeNode("Style") { StyleEditor() }
 
@@ -225,6 +231,25 @@ object ExampleApp {
         widgets()
 
         layout_()
+
+        popupsAndModalWindows()
+
+        columns_()
+
+        collapsingHeader("Filtering TODO") {
+            //            ImGui::Text("Filter usage:\n"
+//                    "  \"\"         display all lines\n"
+//            "  \"xxx\"      display lines containing \"xxx\"\n"
+//            "  \"xxx,yyy\"  display lines containing \"xxx\" or \"yyy\"\n"
+//            "  \"-xxx\"     hide lines containing \"xxx\"");
+//            filter.Draw();
+//            const char* lines[] = { "aaa1.c", "bbb1.c", "ccc1.c", "aaa2.cpp", "bbb2.cpp", "ccc2.cpp", "abc.h", "hello, world" };
+//            for (int i = 0; i < IM_ARRAYSIZE(lines); i++)
+//            if (filter.PassFilter(lines[i]))
+//                ImGui::BulletText("%s", lines[i]);
+        }
+
+        inputAndFocus()
     }
 }
 
@@ -310,6 +335,11 @@ object Console {
                 end()
                 return
             }
+
+            /*  As a specific feature guaranteed by the library, after calling begin() the last Item represent the title bar.
+                So e.g. isItemHovered() will return true when hovering the title bar. */
+            // Here we create a context menu only available from the title bar.
+            popupContextItem { if (menuItem("Close")) open.set(false) }
 
             textWrapped("This example is not yet implemented, you are welcome to contribute")
 //            textWrapped("This example implements a console with basic coloring, completion and history. A more elaborate implementation may want to store entries along with extra data such as timestamp, emitter, etc.");
@@ -574,8 +604,6 @@ object Log {
             scrollToBottom = true
         }
 
-        fun clear() = buf.setLength(0)
-
         fun draw(title: String, open: KMutableProperty0<Boolean>? = null) {
 
             setNextWindowSize(Vec2(500, 400), Cond.FirstUseEver)
@@ -609,6 +637,8 @@ object Log {
             endChild()
             end()
         }
+
+        fun clear() = buf.setLength(0)
     }
 }
 
@@ -742,7 +772,7 @@ object LongText {
 //            static ImGuiTextBuffer log;
 //            static int lines = 0;
 //            ImGui::Text("Printing unusually long amount of text.");
-//            ImGui::Combo("Test type", &test_type, "Single call to TextUnformatted()\0Multiple calls to Text(), clipped manually\0Multiple calls to Text(), not clipped\0");
+//            ImGui::Combo("Test type", &test_type, "Single call to TextUnformatted()\0Multiple calls to Text(), clipped manually\0Multiple calls to Text(), not clipped (slow)\0");
 //            ImGui::Text("Buffer contents: %d lines, %d bytes", lines, log.size());
 //            if (ImGui::Button("Clear")) { log.clear(); lines = 0; }
 //            ImGui::SameLine();
@@ -806,26 +836,35 @@ object AutoResize {
 
 object ConstrainedResize {
 
+    var autoResize = false
     var type = 0
+    var displayLines = 10
 
     /** Demonstrate creating a window with custom resize constraints.   */
     operator fun invoke(open: KMutableProperty0<Boolean>) {
         when (type) {
-            0 -> setNextWindowSizeConstraints(Vec2(-1, 0), Vec2(-1, Float.MAX_VALUE))      // Vertical only
-            1 -> setNextWindowSizeConstraints(Vec2(0, -1), Vec2(Float.MAX_VALUE, -1))      // Horizontal only
-            2 -> setNextWindowSizeConstraints(Vec2(100), Vec2(Float.MAX_VALUE)) // Width > 100, Height > 100
-            3 -> setNextWindowSizeConstraints(Vec2(300, 0), Vec2(400, Float.MAX_VALUE))     // Width 300-400
-            4 -> setNextWindowSizeConstraints(Vec2(), Vec2(Float.MAX_VALUE), CustomConstraints.square)          // Always Square
-            5 -> setNextWindowSizeConstraints(Vec2(), Vec2(Float.MAX_VALUE), CustomConstraints.step, 100)// Fixed Step
+            0 -> setNextWindowSizeConstraints(Vec2(-1, 0), Vec2(-1, Float.MAX_VALUE))     // Vertical only
+            1 -> setNextWindowSizeConstraints(Vec2(0, -1), Vec2(Float.MAX_VALUE, -1))     // Horizontal only
+            2 -> setNextWindowSizeConstraints(Vec2(100), Vec2(Float.MAX_VALUE))                 // Width > 100, Height > 100
+            3 -> setNextWindowSizeConstraints(Vec2(400, -1), Vec2(500, -1))           // Width 400-500
+            4 -> setNextWindowSizeConstraints(Vec2(-1, 400), Vec2(-1, 500))           // Height 400-500
+            5 -> setNextWindowSizeConstraints(Vec2(), Vec2(Float.MAX_VALUE), CustomConstraints.square)          // Always Square
+            6 -> setNextWindowSizeConstraints(Vec2(), Vec2(Float.MAX_VALUE), CustomConstraints.step, 100)// Fixed Step
         }
+        val flags = if (autoResize) Wf.AlwaysAutoResize.i else 0
         withWindow("Example: Constrained Resize", open) {
             val desc = listOf("Resize vertical only", "Resize horizontal only", "Width > 100, Height > 100",
-                    "Width 300-400", "Custom: Always Square", "Custom: Fixed Steps (100)")
-            combo("Constraint", ::type, desc)
+                    "Width 400-500", "Height 400-500", "Custom: Always Square", "Custom: Fixed Steps (100)")
             button("200x200") { setWindowSize(Vec2(200)) }; sameLine()
             button("500x500") { setWindowSize(Vec2(500)) }; sameLine()
             button("800x200") { setWindowSize(Vec2(800, 200)) }
-            for (i in 0 until 10) text("Hello, sailor! Making this line long enough for the example.")
+            withItemWidth(200) {
+                combo("Constraint", ::type, desc)
+                dragInt("Lines", ::displayLines, 0.2f, 1, 100)
+            }
+            checkbox("Auto-resize", ::autoResize)
+            for (i in 0 until displayLines)
+                text(" ".repeat(i * 4) + "Hello, sailor! Making this line long enough for the example.")
         }
     }
 
@@ -994,7 +1033,7 @@ object CustomRendering {
 //                        points.pop_back();
 //                    }
 //                }
-//                draw_list->PushClipRect(canvas_pos, ImVec2(canvas_pos.x+canvas_size.x, canvas_pos.y+canvas_size.y));      // clip lines within the canvas (if we resize it, etc.)
+//                draw_list->PushClipRect(canvas_pos, ImVec2(canvas_pos.x+canvas_size.x, canvas_pos.y+canvas_size.y), true);      // clip lines within the canvas (if we resize it, etc.)
 //                for (int i = 0; i < points.Size - 1; i += 2)
 //                draw_list->AddLine(ImVec2(canvas_pos.x + points[i].x, canvas_pos.y + points[i].y), ImVec2(canvas_pos.x + points[i+1].x, canvas_pos.y + points[i+1].y), IM_COL32(255,255,0,255), 2.0f);
 //                draw_list->PopClipRect();
@@ -1007,8 +1046,17 @@ object CustomRendering {
 
 object StyleEditor {
 
+    var init = true
+    var refSavedStyle: Style? = null
+    // Default Styles Selector
+    var styleIdx = 0
+
+    var windowBorder = false
+    var frameBorder = false
+    var popupBorder = false
+
     var outputDest = 0
-    var outputOnlyModified = false
+    var outputOnlyModified = true
     var alphaFlags = 0
     val filter = TextFilter()
     var windowScale = 1f
@@ -1017,19 +1065,52 @@ object StyleEditor {
 
         /*  You can pass in a reference ImGuiStyle structure to compare to, revert to and save to
             (else it compares to the default style)         */
-        val defaultStyle = Style()  // Default style
-        button("Revert Style") {
-            g.style = ref ?: defaultStyle
-        }
 
-        ref?.let {
-            sameLine()
-            button("Save Style") {
-                TODO()//*ref = style
-            }
-        }
+        // Default to using internal storage as reference
+        if (init && ref == null) refSavedStyle = Style(style)
+        init = false
+        var ref = if (ref == null) refSavedStyle else ref
 
         pushItemWidth(windowWidth * 0.55f)
+        combo("Colors##Selector", ::styleIdx, "Classic\u0000Dark\u0000Light\u0000") {
+            when (styleIdx) {
+                0 -> styleColorsClassic()
+                1 -> styleColorsDark()
+                2 -> styleColorsLight()
+            }
+            refSavedStyle = Style(style)
+        }
+
+        // Simplified Settings
+        if (sliderFloat("FrameRounding", style::frameRounding, 0f, 12f, "%.0f"))
+            style.grabRounding = style.frameRounding    // Make GrabRounding always the same value as FrameRounding
+        run {
+            windowBorder = style.windowBorderSize > 0f
+            if (checkbox("WindowBorder", ::windowBorder))
+                style.windowBorderSize = if (windowBorder) 1f else 0f
+        }
+        sameLine()
+        run {
+            frameBorder = style.frameBorderSize > 0f
+            if (checkbox("FrameBorder", ::frameBorder))
+                style.frameBorderSize = if (frameBorder) 1f else 0f
+        }
+        sameLine()
+        run {
+            popupBorder = style.popupBorderSize > 0f
+            if (checkbox("PopupBorder", ::popupBorder))
+                style.popupBorderSize = if (popupBorder) 1f else 0f
+        }
+
+        // Save/Revert button
+        button("Save Ref") {
+            refSavedStyle = Style(style)
+            ref = style
+        }
+        sameLine()
+        if (button("Revert Ref")) style = ref!!
+        sameLine()
+        showHelpMarker("Save/Revert in local non-persistent storage. Default Colors definition are not affected. Use \"Export Colors\" below to save them somewhere.")
 
         treeNode("Rendering") {
             checkbox("Anti-aliased lines", style::antiAliasedLines)
@@ -1045,17 +1126,24 @@ object StyleEditor {
 
         treeNode("Settings") {
             sliderVec2("WindowPadding", style.windowPadding, 0f, 20f, "%.0f")
-            sliderFloat("WindowRounding", style::windowRounding, 0f, 16f, "%.0f")
-            sliderFloat("ChildWindowRounding", style::childWindowRounding, 0f, 16f, "%.0f")
+            sliderFloat("PopupRounding", style::popupRounding, 0f, 16f, "%.0f")
             sliderVec2("FramePadding", style.framePadding, 0f, 20f, "%.0f")
-            sliderFloat("FrameRounding", style::frameRounding, 0f, 16f, "%.0f")
             sliderVec2("ItemSpacing", style.itemSpacing, 0f, 20f, "%.0f")
             sliderVec2("ItemInnerSpacing", style.itemInnerSpacing, 0f, 20f, "%.0f")
             sliderVec2("TouchExtraPadding", style.touchExtraPadding, 0f, 10f, "%.0f")
             sliderFloat("IndentSpacing", style::indentSpacing, 0f, 30f, "%.0f")
             sliderFloat("ScrollbarSize", style::scrollbarSize, 1f, 20f, "%.0f")
-            sliderFloat("ScrollbarRounding", style::scrollbarRounding, 0.0f, 16.0f, "%.0f")
             sliderFloat("GrabMinSize", style::grabMinSize, 1f, 20f, "%.0f")
+            text("BorderSize")
+            sliderFloat("WindowBorderSize", style::windowBorderSize, 0f, 1f, "%.0f")
+            sliderFloat("ChildBorderSize", style::childBorderSize, 0f, 1f, "%.0f")
+            sliderFloat("PopupBorderSize", style::popupBorderSize, 0f, 1f, "%.0f")
+            sliderFloat("FrameBorderSize", style::frameBorderSize, 0f, 1f, "%.0f")
+            text("Rounding")
+            sliderFloat("WindowRounding", style::windowRounding, 0f, 16f, "%.0f")
+            sliderFloat("ChildRounding", style::childRounding, 0f, 16f, "%.0f")
+            sliderFloat("FrameRounding", style::frameRounding, 0f, 16f, "%.0f")
+            sliderFloat("ScrollbarRounding", style::scrollbarRounding, 0.0f, 16.0f, "%.0f")
             sliderFloat("GrabRounding", style::grabRounding, 0f, 16f, "%.0f")
             text("Alignment")
             sliderVec2("WindowTitleAlign", style.windowTitleAlign, 0f, 1f, "%.2f")
@@ -1066,7 +1154,7 @@ object StyleEditor {
 
         treeNode("Colors") {
 
-            button("Copy Colors") {
+            button("Export Unsaved") {
                 if (outputDest == 0)
                     logToClipboard()
                 else
@@ -1075,7 +1163,7 @@ object StyleEditor {
                 for (i in Col.values()) {
                     val col = style.colors[i]
                     val name = i.name
-                    if (!outputOnlyModified || col != (ref?.colors?.get(i) ?: defaultStyle.colors[i]))
+                    if (!outputOnlyModified || col != ref!!.colors[i])
                         TODO()//logText("colors[ImGuiCol_%s]%*s= ImVec4(%.2ff, %.2ff, %.2ff, %.2ff);" IM_NEWLINE, name, 23 - (int)strlen(name), "", col.x, col.y, col.z, col.w);
                 }
                 logFinish()
@@ -1083,7 +1171,7 @@ object StyleEditor {
             sameLine()
             withItemWidth(120f) { combo("##output_type", ::outputDest, "To Clipboard\u0000To TTY\u0000") }
             sameLine()
-            checkbox("Only Modified Fields", ::outputOnlyModified)
+            checkbox("Only Modified Colors", ::outputOnlyModified)
 
             text("Tip: Left-click on colored square to open color picker,\nRight-click to open edit options menu.")
 
@@ -1091,26 +1179,30 @@ object StyleEditor {
             radioButton("Alpha", ::alphaFlags, Cef.AlphaPreview.i); sameLine()
             radioButton("Both", ::alphaFlags, Cef.AlphaPreviewHalf.i)
 
-            beginChild("#colors", Vec2(0, 300), true, Wf.AlwaysVerticalScrollbar.i)
-            pushItemWidth(-160)
-            for (i in 0 until Col.COUNT.i) {
-                val name = Col.values()[i].name
-                if (!filter.passFilter(name)) // TODO fix bug
-                    continue
-                withId(i) {
-                    colorEditVec4(name, style.colors[i], Cef.AlphaBar or alphaFlags)
-                    if (style.colors[i] != (ref?.colors?.get(i) ?: defaultStyle.colors[i])) {
-                        sameLine()
-                        button("Revert") { style.colors[i] put (ref?.colors?.get(i) ?: defaultStyle.colors[i]) }
-                        ref?.let {
-                            sameLine()
-                            button("Save") { it.colors[i] = style.colors[i] }
+            withChild("#colors", Vec2(0, 300), true, Wf.AlwaysVerticalScrollbar or Wf.AlwaysHorizontalScrollbar) {
+                withItemWidth(-160) {
+                    for (i in 0 until Col.COUNT) {
+                        val name = Col.values()[i].name
+                        if (!filter.passFilter(name)) // TODO fix bug
+                            continue
+                        withId(i) {
+                            colorEditVec4("##color", style.colors[i], Cef.AlphaBar or alphaFlags)
+                            if (style.colors[i] != ref!!.colors[i]) {
+                                /*  Tips: in a real user application, you may want to merge and use an icon font into
+                                    the main font, so instead of "Save"/"Revert" you'd use icons.
+                                    Read the FAQ and extra_fonts/README.txt about using icon fonts. It's really easy
+                                    and super convenient!  */
+                                sameLine(0f, style.itemInnerSpacing.x)
+                                if (button("Save")) ref!!.colors[i] = Vec4(style.colors[i])
+                                sameLine(0f, style.itemInnerSpacing.x)
+                                if (button("Revert")) style.colors[i] = Vec4(ref!!.colors[i])
+                            }
+                            sameLine(0f, style.itemInnerSpacing.x)
+                            textUnformatted(name)
                         }
                     }
                 }
             }
-            popItemWidth()
-            endChild()
         }
 
         val fontsOpened = treeNode("Fonts", "Fonts (${IO.fonts.fonts.size})")

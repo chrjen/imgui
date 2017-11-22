@@ -86,12 +86,15 @@ interface imgui_window {
         else
             flags = window.flags
 
+        /*  Parent window is latched only on the first call to begin() of the frame, so further append-calls can be done
+            from a different window stack         */
+        val parentWindow = if (firstBeginOfTheFrame) g.currentWindowStack.lastOrNull() else window.parentWindow
+        assert(parentWindow != null || flags hasnt Wf.ChildWindow)
+
         // Add to stack
-        val parentWindow = g.currentWindowStack.lastOrNull()
         g.currentWindowStack.add(window)
         window.setCurrent()
         checkStacksSize(window, true)
-        assert(parentWindow != null || flags hasnt Wf.ChildWindow)
         // Not using !WasActive because the implicit "Debug" window would always toggle off->on
         var windowJustActivatedByUser = window.lastFrameActive < currentFrame - 1
         if (flags has Wf.Popup) {
@@ -104,15 +107,15 @@ interface imgui_window {
             window.popupId = popupRef.popupId
         }
 
-        val windowJustAppearingAfterBeingHiddenForResize = window.hiddenFrames == 1
-        window.appearing = windowJustActivatedByUser || windowJustAppearingAfterBeingHiddenForResize
+        val windowJustAppearingAfterHiddenForResize = window.hiddenFrames == 1
+        window.appearing = windowJustActivatedByUser || windowJustAppearingAfterHiddenForResize
+        window.closeButton = pOpen != null
 
         // Process SetNextWindow***() calls
+        if (window.appearing) window.setConditionAllowFlags(Cond.Appearing.i, true)
         var windowPosSetByApi = false
         var windowSizeSetByApi = false
         if (g.setNextWindowPosCond != Cond.Null) {
-            if (window.appearing)
-                window.setWindowPosAllowFlags = window.setWindowPosAllowFlags or Cond.Appearing
             windowPosSetByApi = window.setWindowPosAllowFlags has g.setNextWindowPosCond
             if (windowPosSetByApi && g.setNextWindowPosPivot.lengthSqr > 0.00001f) {
                 /*  May be processed on the next frame if this is our first frame and we are measuring size
@@ -122,12 +125,9 @@ interface imgui_window {
                 window.setWindowPosAllowFlags = window.setWindowPosAllowFlags and (Cond.Once or Cond.FirstUseEver or Cond.Appearing).inv()
             } else
                 window.setPos(g.setNextWindowPosVal, g.setNextWindowPosCond)
-
             g.setNextWindowPosCond = Cond.Null
         }
         if (g.setNextWindowSizeCond != Cond.Null) {
-            if (window.appearing)
-                window.setWindowSizeAllowFlags = window.setWindowSizeAllowFlags or Cond.Appearing
             windowSizeSetByApi = window.setWindowSizeAllowFlags has g.setNextWindowSizeCond
             window.setSize(g.setNextWindowSizeVal, g.setNextWindowSizeCond)
             g.setNextWindowSizeCond = Cond.Null
@@ -138,8 +138,6 @@ interface imgui_window {
         } else if (firstBeginOfTheFrame)
             window.sizeContentsExplicit put 0f
         if (g.setNextWindowCollapsedCond != Cond.Null) {
-            if (window.appearing)
-                window.setWindowCollapsedAllowFlags = window.setWindowCollapsedAllowFlags or Cond.Appearing
             window.setCollapsed(g.setNextWindowCollapsedVal, g.setNextWindowCollapsedCond)
             g.setNextWindowCollapsedCond = Cond.Null
         }
@@ -147,28 +145,20 @@ interface imgui_window {
             setWindowFocus()
             g.setNextWindowFocus = false
         }
-
-        // Update known root window (if we are a child window, otherwise window == window->RootWindow)
-        var rootIdx = g.currentWindowStack.lastIndex
-        while (rootIdx > 0) {
-            if (g.currentWindowStack[rootIdx].flags hasnt Wf.ChildWindow)
-                break
-            rootIdx--
-        }
-        var rootNonPopupIdx = rootIdx
-        while (rootNonPopupIdx > 0) {
-            if (g.currentWindowStack[rootNonPopupIdx].flags hasnt (Wf.ChildWindow or Wf.Popup)
-                    || g.currentWindowStack[rootNonPopupIdx].flags has Wf.Modal)
-                break
-            rootNonPopupIdx--
-        }
-        window.parentWindow = parentWindow
-        window.rootWindow = g.currentWindowStack[rootIdx]
-        // Used to display TitleBgActive color and for selecting which window to use for NavWindowing
-        window.rootNonPopupWindow = g.currentWindowStack[rootNonPopupIdx]
+        if (window.appearing) window.setConditionAllowFlags(Cond.Appearing.i, false)
 
         // When reusing window again multiple times a frame, just append content (don't need to setup again)
         if (firstBeginOfTheFrame) {
+
+            // Initialize
+            window.parentWindow = parentWindow
+            window.rootWindow = if (flags hasnt Wf.ChildWindow) window else parentWindow!!.rootWindow
+            val cond = flags hasnt (Wf.ChildWindow or Wf.Popup) || flags has Wf.Modal
+            // Used to display TitleBgActive color and for selecting which window to use for NavWindowing
+            window.rootNonPopupWindow = if (cond) window else parentWindow!!.rootNonPopupWindow
+            //window->RootNavWindow = window;
+            //while (window->RootNavWindow->Flags & ImGuiWindowFlags_NavFlattened)
+            //    window->RootNavWindow = window->RootNavWindow->ParentWindow;
 
             window.active = true
             window.orderWithinParent = 0
@@ -207,7 +197,7 @@ interface imgui_window {
 
             /* ---------- SIZE ---------- */
 
-            // Save contents size from last frame for auto-fitting (unless explicitly specified)
+            // Update contents size from last frame for auto-fitting (unless explicitly specified)
             window.sizeContents.x = when {
                 window.sizeContentsExplicit.x != 0f -> window.sizeContentsExplicit.x
                 else -> when {
@@ -237,12 +227,23 @@ interface imgui_window {
                 }
             }
 
-            // Lock window padding so that altering the ShowBorders flag for children doesn't have side-effects.
-            if (flags has Wf.ChildWindow &&
-                    flags hasnt (Wf.AlwaysUseWindowPadding or Wf.ShowBorders or Wf.ComboBox or Wf.Popup))
-                window.windowPadding put 0f
-            else
-                window.windowPadding put style.windowPadding
+            // Lock window padding so that altering the borders sizes for children doesn't have side-effects.
+            window.windowPadding put style.windowPadding
+            if (flags has Wf.ChildWindow && flags hasnt (Wf.AlwaysUseWindowPadding or Wf.ComboBox or Wf.Popup) && style.windowBorderSize == 0f)
+                window.windowPadding.y = if (flags has Wf.MenuBar) style.windowPadding.y else 0f
+            window.windowRounding = when {
+                flags has Wf.ChildWindow -> style.childRounding
+                flags has Wf.Popup && flags hasnt Wf.Modal -> style.popupRounding
+                else -> style.windowRounding
+            }
+            window.windowBorderSize = when {
+                flags has Wf.ChildWindow -> style.childBorderSize
+                flags has Wf.Popup && flags hasnt Wf.Modal -> style.popupBorderSize
+                else -> style.windowBorderSize
+            }
+            val windowPadding = window.windowPadding
+            val windowRounding = window.windowRounding
+            val windowBorderSize = window.windowBorderSize
 
             // Calculate auto-fit size, handle automatic resize
             val sizeAutoFit = window.calcSizeAutoFit()
@@ -269,6 +270,23 @@ interface imgui_window {
             // Apply minimum/maximum window size constraints and final size
             window.sizeFull put window.calcSizeFullWithConstraint(window.sizeFull)
             window.size put if (window.collapsed) window.titleBarRect().size else window.sizeFull
+            if (flags has Wf.ChildWindow && flags hasnt Wf.Popup) {
+                assert(windowSizeSetByApi)  // Submitted by beginChild()
+                window.size put window.sizeFull
+            }
+
+            /* ---------- SCROLLBAR STATUS ---------- */
+
+            // Update scrollbar status (based on the Size that was effective during last frame or the auto-resized Size). We need to do this before manual resize (below) is effective.
+            if (!window.collapsed) {
+                window.scrollbar.y = flags has Wf.AlwaysVerticalScrollbar || (window.sizeContents.y > window.sizeFull.y + style.itemSpacing.y && flags hasnt Wf.NoScrollbar)
+                window.scrollbar.x = flags has Wf.AlwaysHorizontalScrollbar || (window.sizeContents.x > window.sizeFull.x - (if (window.scrollbar.y) style.scrollbarSize else 0f) - window.windowPadding.x &&
+                        flags hasnt Wf.NoScrollbar && flags has Wf.HorizontalScrollbar)
+
+                if (window.scrollbar.x && !window.scrollbar.y)
+                    window.scrollbar.y = window.sizeContents.y > window.sizeFull.y + style.itemSpacing.y - style.scrollbarSize && flags hasnt Wf.NoScrollbar
+                window.scrollbarSizes.put(if (window.scrollbar.y) style.scrollbarSize else 0f, if (window.scrollbar.x) style.scrollbarSize else 0f)
+            }
 
             /* ---------- POSITION ---------- */
 
@@ -277,11 +295,9 @@ interface imgui_window {
                 window.orderWithinParent = parentWindow!!.dc.childWindows.size
                 parentWindow.dc.childWindows.add(window)
             }
-            if (flags has Wf.ChildWindow && flags hasnt Wf.Popup) {
-                assert(windowSizeSetByApi) // Submitted by beginChild()
+            if (flags has Wf.ChildWindow && flags hasnt Wf.Popup && !windowPosSetByApi) {
                 window.posF put parentWindow!!.dc.cursorPos
                 window.pos put window.posF
-                window.size put window.sizeFull
             }
 
             val windowPosWithPivot = window.setWindowPosVal.x != Float.MAX_VALUE && window.hiddenFrames == 0
@@ -304,7 +320,7 @@ interface imgui_window {
                             Rect(parentWindow.pos.x + horizontalOverlap, -Float.MAX_VALUE,
                                     parentWindow.pos.x + parentWindow.size.x - horizontalOverlap - parentWindow.scrollbarSizes.x, Float.MAX_VALUE)
                 window.posF put findBestPopupWindowPos(window.posF, window, rectToAvoid)
-            } else if (flags has Wf.Popup && !windowPosSetByApi && windowJustAppearingAfterBeingHiddenForResize) {
+            } else if (flags has Wf.Popup && !windowPosSetByApi && windowJustAppearingAfterHiddenForResize) {
                 val rectToAvoid = Rect(window.posF.x - 1, window.posF.y - 1, window.posF.x + 1, window.posF.y + 1)
                 window.posF put findBestPopupWindowPos(window.posF, window, rectToAvoid)
             }
@@ -364,18 +380,20 @@ interface imgui_window {
 
             // Draw window + handle manual resize
             val titleBarRect = window.titleBarRect()
-            val windowRounding = if (flags has Wf.ChildWindow) style.childWindowRounding else style.windowRounding
-            if (window.collapsed)
-            // Title bar only
+            if (window.collapsed) {
+                // Title bar only
+                val backupBorderSize = style.frameBorderSize
+                style.frameBorderSize = window.windowBorderSize
                 renderFrame(titleBarRect.min, titleBarRect.max, Col.TitleBgCollapsed.u32, true, windowRounding)
-            else {
+                style.frameBorderSize = backupBorderSize
+            } else {
                 var resizeCol = Col.Text
                 val resizeCornerSize = glm.max(g.fontSize * 1.35f, windowRounding + 1f + g.fontSize * 0.2f)
                 if (flags hasnt Wf.AlwaysAutoResize && window.autoFitFrames lessThanEqual 0 && flags hasnt Wf.NoResize) {
                     // Manual resize
                     // Using the FlattenChilds button flag, we make the resize button accessible even if we are hovering over a child window
                     val br = window.rect().br
-                    val resizeRect = Rect(br - resizeCornerSize * 0.75f, br)
+                    val resizeRect = Rect(br - glm.floor(resizeCornerSize * 0.75f), br)
                     val resizeId = window.getId("#RESIZE")
                     val (_, hovered, held) = buttonBehavior(resizeRect, resizeId, Bf.FlattenChilds)
                     resizeCol = if (held) Col.ResizeGripActive else if (hovered) Col.ResizeGripHovered else Col.ResizeGrip
@@ -388,7 +406,7 @@ interface imgui_window {
                         clearActiveId()
                     } else if (held)
                     // We don't use an incremental MouseDelta but rather compute an absolute target size based on mouse position
-                        sizeTarget put ((IO.mousePos - g.activeIdClickOffset + resizeRect.size) - window.pos)
+                        sizeTarget put (IO.mousePos - g.activeIdClickOffset - window.pos + resizeRect.size)
 
                     if (sizeTarget notEqual Float.MAX_VALUE) {
                         window.sizeFull put window.calcSizeFullWithConstraint(sizeTarget)
@@ -398,20 +416,6 @@ interface imgui_window {
                     window.size put window.sizeFull
                     titleBarRect put window.titleBarRect()
                 }
-
-                // Scrollbars
-                window.scrollbar.y = flags has Wf.AlwaysVerticalScrollbar ||
-                        ((window.sizeContents.y > window.size.y + style.itemSpacing.y) && flags hasnt Wf.NoScrollbar)
-                window.scrollbar.x = flags has Wf.AlwaysHorizontalScrollbar ||
-                        ((window.sizeContents.x >
-                                window.size.x - (if (window.scrollbar.y) style.scrollbarSize else 0f) - window.windowPadding.x)
-                                && flags hasnt Wf.NoScrollbar && flags has Wf.HorizontalScrollbar)
-                if (window.scrollbar.x && !window.scrollbar.y)
-                    window.scrollbar.y = (window.sizeContents.y > window.size.y + style.itemSpacing.y - style.scrollbarSize) &&
-                            flags hasnt Wf.NoScrollbar
-                window.scrollbarSizes.x = if (window.scrollbar.y) style.scrollbarSize else 0f
-                window.scrollbarSizes.y = if (window.scrollbar.x) style.scrollbarSize else 0f
-                window.borderSize = if (flags has Wf.ShowBorders) 1f else 0f
 
                 // Window background, Default Alpha
                 window.drawList.addRectFilled(Vec2(window.pos.x, window.pos.y + window.titleBarHeight),
@@ -428,10 +432,10 @@ interface imgui_window {
                 // Menu bar
                 if (flags has Wf.MenuBar) {
                     val menuBarRect = window.menuBarRect()
-                    if (flags has Wf.ShowBorders)
-                        window.drawList.addLine(menuBarRect.bl, menuBarRect.br, Col.Border.u32)
                     window.drawList.addRectFilled(menuBarRect.tl, menuBarRect.br, Col.MenuBarBg.u32,
                             if (flags has Wf.NoTitleBar) windowRounding else 0f, Corner.TopLeft or Corner.TopRight)
+                    if (style.frameBorderSize > 0f)
+                        window.drawList.addLine(menuBarRect.bl, menuBarRect.br, Col.Border.u32, style.frameBorderSize)
                 }
 
                 // Scrollbars
@@ -444,22 +448,18 @@ interface imgui_window {
                 (after the input handling so we don't have a frame of latency)  */
                 if (flags hasnt Wf.NoResize) {
                     val br = window.rect().br
-                    window.drawList.pathLineTo(br + Vec2(-resizeCornerSize, -window.borderSize))
-                    window.drawList.pathLineTo(br + Vec2(-window.borderSize, -resizeCornerSize))
-                    window.drawList.pathArcToFast(Vec2(br.x - windowRounding - window.borderSize, br.y - windowRounding - window.borderSize),
-                            windowRounding, 0, 3)
+                    window.drawList.pathLineTo(br + Vec2(-resizeCornerSize, -windowBorderSize))
+                    window.drawList.pathLineTo(br + Vec2(-windowBorderSize, -resizeCornerSize))
+                    val centre = Vec2(br.x - windowRounding - windowBorderSize, br.y - windowRounding - windowBorderSize)
+                    window.drawList.pathArcToFast(centre, windowRounding, 0, 3)
                     window.drawList.pathFillConvex(resizeCol.u32)
                 }
 
                 // Borders
-                if (flags has Wf.ShowBorders) {
-                    val a = Vec2(window.pos.x + 1, window.pos.y + 1)
-                    val b = window.size + window.pos + 1
-                    window.drawList.addRect(a, b, Col.BorderShadow.u32, windowRounding)
-                    window.drawList.addRect(Vec2(window.pos), window.size + window.pos, Col.Border.u32, windowRounding)
-                    if (flags hasnt Wf.NoTitleBar)
-                        window.drawList.addLine(titleBarRect.bl + Vec2(1, 0), titleBarRect.br - Vec2(1, 0), Col.Border.u32)
-                }
+                if (windowBorderSize > 0f)
+                    window.drawList.addRect(Vec2(window.pos), window.size + window.pos, Col.Border.u32, windowRounding, 0.inv(), windowBorderSize)
+                if (style.frameBorderSize > 0 && flags hasnt Wf.NoTitleBar)
+                    window.drawList.addLine(titleBarRect.bl + Vec2(1, -1), titleBarRect.br + Vec2(-1), Col.Border.u32, style.frameBorderSize)
             }
 
             with(window) {
@@ -472,7 +472,10 @@ interface imgui_window {
                 contentsRegionRect.max.y = -scroll.y - windowPadding.y + (
                         if (sizeContentsExplicit.y != 0f) sizeContentsExplicit.y else (size.y - scrollbarSizes.y))
 
-                // Setup drawing context
+                /*  Setup drawing context
+                    (NB: That term "drawing context / DC" lost its meaning a long time ago. Initially was meant to hold
+                    transient data only. Nowadays difference between window-> and window->DC-> is dubious.)
+                 */
                 dc.indentX = 0f + windowPadding.x - scroll.x
                 dc.groupOffsetX = 0f
                 dc.columnsOffsetX = 0.0f
@@ -575,11 +578,17 @@ interface imgui_window {
             window.innerRect.max.x = window.pos.x + window.size.x - window.scrollbarSizes.x
             window.innerRect.max.y = window.pos.y + window.size.y - window.scrollbarSizes.y
             //window->DrawList->AddRect(window->InnerRect.Min, window->InnerRect.Max, IM_COL32_WHITE);
+
+            /* After begin() we fill the last item / hovered data using the title bar data. Make that a standard behavior
+                (to allow usage of context menus on title bar only, etc.).             */
+            window.dc.lastItemId = window.moveId
+            window.dc.lastItemRect = titleBarRect
+            window.dc.lastItemRectHoveredRect = isMouseHoveringRect(titleBarRect.min, titleBarRect.max, false)
         }
 
         /*  Inner clipping rectangle
             Force round operator last to ensure that e.g. (int)(max.x-min.x) in user's render code produce correct result.         */
-        val borderSize = window.borderSize
+        val borderSize = window.windowBorderSize
         val clipRect = Rect()
         clipRect.min.x = glm.floor(0.5f + window.innerRect.min.x + (borderSize max glm.floor(window.windowPadding.x * 0.5f)))
         clipRect.min.y = glm.floor(0.5f + window.innerRect.min.y + borderSize)
@@ -588,7 +597,7 @@ interface imgui_window {
         pushClipRect(clipRect.min, clipRect.max, true)
 
         // Clear 'accessed' flag last thing
-        if (firstBeginOfTheFrame) window.accessed = false
+        if (firstBeginOfTheFrame) window.writeAccessed = false
         window.beginCount++
         g.setNextWindowSizeConstraint = false
 
@@ -867,7 +876,9 @@ interface imgui_window {
                 size.x = glm.max(contentAvail.x, 4f) - glm.abs(size.x)
             if (size.y <= 0f)
                 size.y = glm.max(contentAvail.y, 4f) - glm.abs(size.y)
-            if (border) flags = flags or Wf.ShowBorders
+
+            val backupBorderSize = style.childBorderSize
+            if (!border) style.childBorderSize = 0f
             flags = flags or extraFlags
 
             val title =
@@ -877,16 +888,14 @@ interface imgui_window {
             val ret = ImGui.begin(title, null, flags)
             val childWindow = currentWindow
             childWindow.autoFitChildAxes = autoFitAxes
-            if (parentWindow.flags hasnt Wf.ShowBorders)
-                childWindow.flags = childWindow.flags wo Wf.ShowBorders
+            style.childBorderSize = backupBorderSize
 
             return ret
         }
 
         fun getWindowBgColorIdxFromFlags(flags: Int) = when {
-            flags has Wf.ComboBox -> Col.ComboBg
             flags has (Wf.Tooltip or Wf.Popup) -> Col.PopupBg
-            flags has Wf.ChildWindow -> Col.ChildWindowBg
+            flags has Wf.ChildWindow -> Col.ChildBg
             else -> Col.WindowBg
         }
     }

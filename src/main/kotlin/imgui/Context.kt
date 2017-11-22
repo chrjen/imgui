@@ -40,6 +40,8 @@ object Context {
     val windowsSortBuffer = ArrayList<Window>()
 
     val currentWindowStack = Stack<Window>()
+
+    val windowsById = mutableMapOf<Int, Window>()
     /** Being drawn into    */
     var currentWindow: Window? = null
     /** Will catch keyboard inputs  */
@@ -54,10 +56,14 @@ object Context {
     var hoveredIdAllowOverlap = false
 
     var hoveredIdPreviousFrame = 0
+
+    var hoveredIdTimer = 0f
     /** Active widget   */
     var activeId = 0
 
     var activeIdPreviousFrame = 0
+
+    var activeIdTimer = 0f
     /** Active widget has been seen this frame   */
     var activeIdIsAlive = false
     /** Set at the time of activation for one frame */
@@ -263,10 +269,12 @@ object IO {
     // Advanced/subtle behaviors
     //------------------------------------------------------------------
 
-    /** OS X style: Text editing cursor movement using Alt instead of Ctrl, Shortcuts using Cmd/Super instead of Ctrl,
-     *  Line/Text Start and End using Cmd+Arrows instead of Home/End, Double click selects by word instead of selecting
-     *  whole text, Multi-selection in lists uses Cmd/Super instead of Ctrl */
-    var osxBehaviors = false
+    /** = defined(__APPLE__), OS X style: Text editing cursor movement using Alt instead of Ctrl, Shortcuts using
+     *  Cmd/Super instead of Ctrl, Line/Text Start and End using Cmd + Arrows instead of Home/End, Double click selects
+     *  by word instead of selecting whole text, Multi-selection in lists uses Cmd/Super instead of Ctrl */
+    var optMacOSXBehaviors = false  // JVM TODO
+    /** Enable blinking cursor, for users who consider it annoying. */
+    var optCursorBlink = true
 
     //------------------------------------------------------------------
     // User Functions
@@ -340,16 +348,17 @@ object IO {
     // Output - Retrieve after calling NewFrame()
     //------------------------------------------------------------------
 
-    /** Mouse is hovering a window or widget is active (= ImGui will use your mouse input). Use to hide mouse from the
-    rest of your application    */
+    /** When IO.wantCaptureMouse is true, do not dispatch mouse input data to your main application. This is set by ImGui
+     *  when it wants to use your mouse (e.g. unclicked mouse is hovering a window, or a widget is active).     */
     var wantCaptureMouse = false
-    /** Widget is active (= ImGui will use your keyboard input). Use to hide keyboard from the rest of your application */
+    /** When IO.wantCaptureKeyboard is true, do not dispatch keyboard input data to your main application. This is set
+     *  by ImGui when it wants to use your keyboard inputs. */
     var wantCaptureKeyboard = false
-    /** Some text input widget is active, which will read input characters from the InputCharacters array. Use to
-    activate on screen keyboard if your system needs one    */
+    /** Mobile/console: when IO.wantTextInput is true, you may display an on-screen keyboard. This is set by ImGui when
+     *  it wants textual keyboard input to happen (e.g. when a InputText widget is active). */
     var wantTextInput = false
-    /** [BETA-NAV] MousePos has been altered. back-end should reposition mouse on next frame.
-     *  Used only if 'NavMovesMouse=true'.    */
+    /** [BETA-NAV] MousePos has been altered, back-end should reposition mouse on next frame. Set only when
+     * 'navMovesMouse = true'.    */
     var wantMoveMouse = false
     /** Application framerate estimation, in frame per second. Solely for convenience. Rolling average estimation based
     on IO.DeltaTime over 120 frames */
@@ -362,8 +371,8 @@ object IO {
     var metricsRenderIndices = 0
     /** Number of visible root windows (exclude child windows)  */
     var metricsActiveWindows = 0
-    /** Mouse delta. Note that this is zero if either current or previous position are negative, so a
-    disappearing/reappearing mouse won't have a huge delta for one frame.   */
+    /** Mouse delta. Note that this is zero if either current or previous position are invalid (-FLOAT_MAX_VALUE), so a
+    disappearing/reappearing mouse won't have a huge delta.   */
     var mouseDelta = Vec2()
 
 
@@ -390,7 +399,9 @@ object IO {
     val mouseDownDuration = FloatArray(5, { -1f })
     /** Previous time the mouse button has been down    */
     val mouseDownDurationPrev = FloatArray(5, { -1f })
-    /** Squared maximum distance of how much mouse has traveled from the click point    */
+    /** Maximum distance, absolute, on each axis, of how much mouse has traveled from the clicking point    */
+    val mouseDragMaxDistanceAbs = Array(5, { Vec2() })
+    /** Squared maximum distance of how much mouse has traveled from the clicking point */
     val mouseDragMaxDistanceSqr = FloatArray(5)
     /** Duration the keyboard key has been down (0.0f == just pressed)  */
     val keysDownDuration = FloatArray(512, { -1f })
@@ -409,18 +420,28 @@ class Style {
     var alpha = 1f
     /** Padding within a window */
     var windowPadding = Vec2(8)
-    /** Minimum window size */
-    var windowMinSize = Vec2i(32)
     /** Radius of window corners rounding. Set to 0.0f to have rectangular windows  */
     var windowRounding = 9f
+    /** Thickness of border around windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly)   */
+    var windowBorderSize = 0f
+    /** Minimum window size */
+    var windowMinSize = Vec2i(32)
     /** Alignment for title bar text    */
     var windowTitleAlign = Vec2(0f, 0.5f)
-    /** Radius of child window corners rounding. Set to 0.0f to have rectangular child windows  */
-    var childWindowRounding = 0f
+    /** Radius of child window corners rounding. Set to 0.0f to have rectangular child windows.  */
+    var childRounding = 0f
+    /** Thickness of border around child windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly) */
+    var childBorderSize = 1f
+    /** Radius of popup window corners rounding.    */
+    var popupRounding = 0f
+    /** Thickness of border around popup windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly) */
+    var popupBorderSize = 1f
     /** Padding within a framed rectangle (used by most widgets)    */
     var framePadding = Vec2(4, 3)
     /** Radius of frame corners rounding. Set to 0.0f to have rectangular frames (used by most widgets).    */
     var frameRounding = 0f
+    /** Thickness of border around frames. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly)    */
+    var frameBorderSize = 0f
     /** Horizontal and vertical spacing between widgets/lines   */
     var itemSpacing = Vec2(8, 4)
     /** Horizontal and vertical spacing between within elements of a composed widget (e.g. a slider and its label)  */
@@ -466,28 +487,64 @@ class Style {
         ImGui.styleColorsClassic(this)
     }
 
+    constructor()
+
+    constructor(style: Style) {
+        alpha = style.alpha
+        windowPadding put style.windowPadding
+        windowRounding = style.windowRounding
+        windowBorderSize = style.windowBorderSize
+        windowMinSize put style.windowMinSize
+        windowTitleAlign put style.windowTitleAlign
+        childRounding = style.childRounding
+        childBorderSize = style.childBorderSize
+        popupRounding = style.popupRounding
+        popupBorderSize = style.popupBorderSize
+        framePadding put style.framePadding
+        frameRounding = style.frameRounding
+        frameBorderSize = style.frameBorderSize
+        itemSpacing put style.itemSpacing
+        itemInnerSpacing put style.itemInnerSpacing
+        touchExtraPadding put style.touchExtraPadding
+        indentSpacing = style.indentSpacing
+        columnsMinSpacing = style.columnsMinSpacing
+        scrollbarSize = style.scrollbarSize
+        scrollbarRounding = style.scrollbarRounding
+        grabMinSize = style.grabMinSize
+        grabRounding = style.grabRounding
+        buttonTextAlign put style.buttonTextAlign
+        displayWindowPadding put style.displayWindowPadding
+        displaySafeAreaPadding put style.displaySafeAreaPadding
+        antiAliasedLines = style.antiAliasedLines
+        antiAliasedShapes = style.antiAliasedShapes
+        curveTessellationTol = style.curveTessellationTol
+        style.colors.forEach { colors.add(Vec4(it)) }
+//        locale = style.locale
+    }
+
     /** To scale your entire UI (e.g. if you want your app to use High DPI or generally be DPI aware) you may use this
      *  helper function. Scaling the fonts is done separately and is up to you.
      *  Tips: if you need to change your scale multiple times, prefer calling this on a freshly initialized Style
      *  structure rather than scaling multiple times (because floating point multiplications are lossy).    */
     fun scaleAllSizes(scaleFactor: Float) {
-        windowPadding timesAssign  scaleFactor
-        windowMinSize timesAssign scaleFactor
-        windowRounding *= scaleFactor
-        childWindowRounding *= scaleFactor
-        framePadding timesAssign scaleFactor
-        frameRounding *= scaleFactor
-        itemSpacing timesAssign scaleFactor
-        itemInnerSpacing timesAssign scaleFactor
-        touchExtraPadding timesAssign scaleFactor
-        indentSpacing *= scaleFactor
-        columnsMinSpacing *= scaleFactor
-        scrollbarSize *= scaleFactor
-        scrollbarRounding *= scaleFactor
-        grabMinSize *= scaleFactor
-        grabRounding *= scaleFactor
-        displayWindowPadding timesAssign scaleFactor
-        displaySafeAreaPadding timesAssign scaleFactor
+        windowPadding = glm.floor(windowPadding * scaleFactor)
+        windowRounding = glm.floor(windowRounding * scaleFactor)
+        windowMinSize.put(glm.floor(windowMinSize.x * scaleFactor), glm.floor(windowMinSize.y * scaleFactor))
+        childRounding = glm.floor(childRounding * scaleFactor)
+        popupRounding = glm.floor(popupRounding * scaleFactor)
+        framePadding = glm.floor(framePadding * scaleFactor)
+        frameRounding = glm.floor(frameRounding * scaleFactor)
+        itemSpacing = glm.floor(itemSpacing * scaleFactor)
+        itemInnerSpacing = glm.floor(itemInnerSpacing * scaleFactor)
+        touchExtraPadding = glm.floor(touchExtraPadding * scaleFactor)
+        indentSpacing = glm.floor(indentSpacing * scaleFactor)
+        columnsMinSpacing = glm.floor(columnsMinSpacing * scaleFactor)
+        scrollbarSize = glm.floor(scrollbarSize * scaleFactor)
+        scrollbarRounding = glm.floor(scrollbarRounding * scaleFactor)
+        grabMinSize = glm.floor(grabMinSize * scaleFactor)
+        grabRounding = glm.floor(grabRounding * scaleFactor)
+        displayWindowPadding = glm.floor(displayWindowPadding * scaleFactor)
+        displaySafeAreaPadding = glm.floor(displaySafeAreaPadding * scaleFactor)
     }
 }
 

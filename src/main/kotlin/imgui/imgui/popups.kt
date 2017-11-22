@@ -31,7 +31,7 @@ interface imgui_popups {
 
     /** Helper to open popup when clicked on last item. return true when just opened.   */
     fun openPopupOnItemClick(strId: String = "", mouseButton: Int = 1) = with(g.currentWindow!!) {
-        if (isMouseClicked(mouseButton) && isItemHovered(Hf.AllowWhenBlockedByPopup.i)) {
+        if (isMouseClicked(mouseButton) && isItemHovered(Hf.AllowWhenBlockedByPopup)) {
             // If user hasn't passed an ID, we can use the LastItemID. Using LastItemID as a Popup ID won't conflict!
             val id = if (strId.isNotEmpty()) getId(strId) else dc.lastItemId
             assert(id != 0) // However, you cannot pass a NULL str_id if the last item has no identifier (e.g. a Text() item)
@@ -47,7 +47,7 @@ interface imgui_popups {
             clearSetNextWindowData()    // We behave like Begin() and need to consume those values
             return false
         }
-        return beginPopupEx(g.currentWindow!!.getId(strId), Wf.ShowBorders or Wf.AlwaysAutoResize)
+        return beginPopupEx(g.currentWindow!!.getId(strId), Wf.AlwaysAutoResize.i)
     }
 
     /** modal dialog (block interactions behind the modal window, can't close the modal window by clicking outside) */
@@ -76,18 +76,29 @@ interface imgui_popups {
 
     /** This is a helper to handle the simplest case of associating one named popup to one given widget.
      *  You may want to handle this on user side if you have specific needs (e.g. tweaking IsItemHovered() parameters).
-     *  You can pass a NULL str_id to use the identifier of the last item.  */
-//    IMGUI_API bool          BeginPopupContextItem(const char* str_id = NULL, int mouse_button = 1); // helper to open and begin popup when clicked on last item. if you can pass a NULL str_id only if the previous item had an id. If you want to use that on a non-interactive item such as Text() you need to pass in an explicit ID here. read comments in .cpp!
+     *  You can pass a NULL str_id to use the identifier of the last item.
+     *  helper to open and begin popup when clicked on last item. if you can pass an empty strId only if the previous
+     *  item had an id. If you want to use that on a non-interactive item such as text() you need to pass in an explicit
+     *  id here. read comments in .cpp! */
+    fun beginPopupContextItem(strId: String = "", mouseButton: Int = 1): Boolean {
+        val window = currentWindow
+        // If user hasn't passed an id, we can use the lastItemID. Using lastItemID as a Popup id won't conflict!
+        val id = if(strId.isNotEmpty()) window.getId(strId) else window.dc.lastItemId
+        assert(id != 0) // However, you cannot pass a NULL str_id if the last item has no identifier (e.g. a text() item)
+        if (isMouseClicked(mouseButton) && isItemHovered(Hf.AllowWhenBlockedByPopup))
+            openPopupEx(id, true)
+        return beginPopupEx(id, Wf.AlwaysAutoResize.i)
+    }
 
     /** Helper to open and begin popup when clicked on current window.  */
     fun beginPopupContextWindow(strId: String = "", mouseButton: Int = 1, alsoOverItems: Boolean = true): Boolean {
         val strId = if (strId.isEmpty()) "window_context" else strId
         val id = currentWindow.getId(strId)
         if (isMouseClicked(mouseButton))
-            if (isWindowHovered(Hf.AllowWhenBlockedByPopup.i))
+            if (isWindowHovered(Hf.AllowWhenBlockedByPopup))
                 if (alsoOverItems || !isAnyItemHovered)
                     openPopupEx(id, true)
-        return beginPopupEx(id, Wf.ShowBorders or Wf.AlwaysAutoResize)
+        return beginPopupEx(id, Wf.AlwaysAutoResize.i)
     }
 
 //    IMGUI_API bool          BeginPopupContextVoid(const char* str_id = NULL, int mouse_button = 1); // helper to open and begin popup when clicked in void (where there are no imgui windows).
@@ -97,7 +108,6 @@ interface imgui_popups {
         assert(window.flags has Wf.Popup)  // Mismatched BeginPopup()/EndPopup() calls
         assert(g.currentPopupStack.isNotEmpty())
         end()
-        if (window.flags hasnt Wf.Modal) popStyleVar()
     }
 
     fun isPopupOpen(strId: String) = g.openPopupStack.size > g.currentPopupStack.size &&
