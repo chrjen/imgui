@@ -7,6 +7,8 @@ import glm_.*
 import glm_.vec2.Vec2
 import glm_.vec2.Vec2i
 import glm_.vec4.Vec4
+import imgui.Context.style
+import imgui.internal.fileLoadToCharArray
 import imgui.internal.isSpace
 import imgui.internal.upperPowerOfTwo
 import imgui.stb.*
@@ -65,7 +67,7 @@ class FontConfig {
 
 class FontGlyph {
     /** 0x0000..0xFFFF  */
-    var codepoint = '\u0000'
+    var codepoint = NUL
     /** Distance to next character (= data from font + FontConfig.glyphExtraSpacing.x baked in)  */
     var advanceX = 0f
     // Glyph corners
@@ -146,14 +148,21 @@ class FontAtlas {
         return addFontFromMemoryCompressedBase85TTF(ttfCompressedBase85, fontCfg.sizePixels, fontCfg, glyphRangesDefault)
     }
 
-    //    IMGUI_API ImFont*           AddFontFromFileTTF(const char* filename, float size_pixels, const ImFontConfig* font_cfg = NULL, const ImWchar* glyph_ranges = NULL);
+    fun addFontFromFileTTF(filename: String, sizePixels: Float, fontCfg: FontConfig = FontConfig(),
+                           glyphRanges: IntArray = intArrayOf()): Font? {
+
+        val chars = fileLoadToCharArray(filename) ?: return null
+        if (fontCfg.name.isEmpty())
+        // Store a short copy of filename into into the font name for convenience
+            fontCfg.name = "${filename.substringAfterLast('/')}, %.0fpx".format(style.locale, sizePixels)
+        return addFontFromMemoryTTF(chars, sizePixels, fontCfg, glyphRanges)
+    }
 
     /** Note: Transfer ownership of 'ttfData' to FontAtlas! Will be deleted after build(). Set fontCfg.fontDataOwnedByAtlas
      *  to false to keep ownership. */
-    fun addFontFromMemoryTTF(fontData: CharArray, sizePixels: Float, fontCfgTemplate: FontConfig? = null,
+    fun addFontFromMemoryTTF(fontData: CharArray, sizePixels: Float, fontCfg: FontConfig = FontConfig(),
                              glyphRanges: IntArray = intArrayOf()): Font {
 
-        val fontCfg = fontCfgTemplate ?: FontConfig()
         assert(fontCfg.fontData.isEmpty())
         fontCfg.fontData = fontData
         fontCfg.fontDataBuffer = bufferBig(fontData.size).apply { fontData.forEachIndexed { i, c -> this[i] = c.b } }
@@ -164,12 +173,11 @@ class FontAtlas {
     }
 
     /** @param compressedFontData still owned by caller. Compress with binary_to_compressed_c.cpp.   */
-    fun addFontFromMemoryCompressedTTF(compressedFontData: CharArray, sizePixels: Float, fontCfgTemplate: FontConfig? = null,
-                                       glyphRanges: IntArray): Font {
+    fun addFontFromMemoryCompressedTTF(compressedFontData: CharArray, sizePixels: Float, fontCfg: FontConfig = FontConfig(),
+                                       glyphRanges: IntArray = intArrayOf()): Font {
 
         val bufDecompressedData = stb.decompress(compressedFontData)
 
-        val fontCfg = fontCfgTemplate ?: FontConfig()
         assert(fontCfg.fontData.isEmpty())
         fontCfg.fontDataOwnedByAtlas = true
         return addFontFromMemoryTTF(bufDecompressedData, sizePixels, fontCfg, glyphRanges)
@@ -177,8 +185,8 @@ class FontAtlas {
 
     /** @param compressedFontDataBase85 still owned by caller. Compress with binary_to_compressed_c.cpp with -base85
      *  paramaeter  */
-    fun addFontFromMemoryCompressedBase85TTF(compressedFontDataBase85: String, sizePixels: Float, fontCfg: FontConfig? = null,
-                                             glyphRanges: IntArray): Font {
+    fun addFontFromMemoryCompressedBase85TTF(compressedFontDataBase85: String, sizePixels: Float, fontCfg: FontConfig = FontConfig(),
+                                             glyphRanges: IntArray = intArrayOf()): Font {
 
         val compressedTtf = decode85(compressedFontDataBase85)
         return addFontFromMemoryCompressedTTF(compressedTtf, sizePixels, fontCfg, glyphRanges)
@@ -532,7 +540,7 @@ class FontAtlas {
 
     fun buildWithStbTrueType(): Boolean {
 
-        assert(configData.size > 0)
+        assert(configData.isNotEmpty())
 
         buildRegisterDefaultCustomRects()
 
@@ -540,15 +548,20 @@ class FontAtlas {
         texSize put 0
         texUvWhitePixel put 0
         clearTexData()
+        val inRange = IntArray(2)
 
         // Count glyphs/ranges
         var totalGlyphsCount = 0
         var totalRangesCount = 0
         for (cfg in configData) {
-            if (cfg.glyphRanges.isEmpty())
-                cfg.glyphRanges = glyphRangesDefault
-            for (i in cfg.glyphRanges.indices step 2) {
-                totalGlyphsCount += (cfg.glyphRanges[i + 1] - cfg.glyphRanges[i]) + 1
+            if (cfg.glyphRanges.isEmpty()) cfg.glyphRanges = glyphRangesDefault
+            var i = 0
+            inRange[0] = cfg.glyphRanges[i++]
+            inRange[1] = cfg.glyphRanges[i++]
+            while (inRange[0] != 0 && inRange[1] != 0) {
+                totalGlyphsCount += (inRange[1] - inRange[0]) + 1
+                inRange[0] = cfg.glyphRanges.getOrElse(i++, { 0 })
+                inRange[1] = cfg.glyphRanges.getOrElse(i++, { 0 })
                 totalRangesCount++
             }
         }
@@ -585,10 +598,8 @@ class FontAtlas {
         }
 
         val tmpArray = Array(configData.size, { FontTempBuildData() })
-        for (i in configData.indices) {
-
-            val cfg = configData[i]
-            val tmp = tmpArray[i]
+        configData.forEachIndexed { input, cfg ->
+            val tmp = tmpArray[input]
             assert(with(cfg.dstFont!!) { !isLoaded || containerAtlas == this@FontAtlas })
 
             val fontOffset = stbtt_GetFontOffsetForIndex(cfg.fontDataBuffer, cfg.fontNo)
@@ -604,24 +615,30 @@ class FontAtlas {
 
         /*  First font pass: pack all glyphs (no rendering at this point, we are working with rectangles in an
             infinitely tall texture at this point)  */
-        for (input in configData.indices) {
+        configData.forEachIndexed { input, cfg ->
 
-            val cfg = configData[input]
             val tmp = tmpArray[input]
 
             // Setup ranges
             var fontGlyphsCount = 0
             var fontRangesCount = 0
-            for (i in cfg.glyphRanges.indices step 2) {
-                fontGlyphsCount += (cfg.glyphRanges[i + 1] - cfg.glyphRanges[i]) + 1
+            var i = 0
+            inRange[0] = cfg.glyphRanges[i++]
+            inRange[1] = cfg.glyphRanges[i++]
+            while (inRange[0] != 0 && inRange[1] != 0) {
+                fontGlyphsCount += (inRange[1] - inRange[0]) + 1
+                inRange[0] = cfg.glyphRanges.getOrElse(i++, { 0 })
+                inRange[1] = cfg.glyphRanges.getOrElse(i++, { 0 })
                 fontRangesCount++
             }
             tmp.ranges = STBTTPackRange.create(bufRanges.address() + bufRectsN * fontRangesCount, fontRangesCount)
             tmp.rangesCount = fontRangesCount
             bufRangesN += fontRangesCount
-            for (i in 0 until fontRangesCount) {
-                val inRange = IntArray(2, { cfg.glyphRanges[i * 2 + it] })
-                val range = tmp.ranges[i]
+            i = 0
+            while (i < fontRangesCount) {
+                inRange[0] = cfg.glyphRanges[i * 2]
+                inRange[1] = cfg.glyphRanges[i * 2 + 1]
+                val range = tmp.ranges[i++]
                 range.fontSize = cfg.sizePixels
                 range.firstUnicodeCodepointInRange = inRange[0]
                 range.numChars = (inRange[1] - inRange[0]) + 1
@@ -689,11 +706,8 @@ class FontAtlas {
             buildSetupFont(dstFont, cfg, ascent, descent)
             val off = Vec2(cfg.glyphOffset.x, cfg.glyphOffset.y + (dstFont.ascent + 0.5f).i.f)
 
-            // Always clear fallback so FindGlyph can return NULL. It will be set again in BuildLookupTable()
-            dstFont.fallbackGlyph = null
-            for (i in 0 until tmp.rangesCount) {
+            tmp.ranges.forEach { range ->
 
-                val range = tmp.ranges[i]
                 for (charIdx in 0 until range.numChars) {
 
                     val pc = range.chardataForRange[charIdx]
@@ -991,7 +1005,7 @@ class Font {
 
     //    IMGUI_API void              SetFallbackChar(ImWchar c);
 
-    fun getCharAdvance(c: Char) = if (c < indexAdvanceX.size) indexAdvanceX[c.i] else fallbackAdvanceX
+    fun getCharAdvance_aaaaa(c: Char) = if (c < indexAdvanceX.size) indexAdvanceX[c.i] else fallbackAdvanceX
 
     var loaded = false
     val isLoaded get() = loaded
@@ -1125,7 +1139,7 @@ class Font {
                         s + 1
                     else
                         TODO() // (s + ImTextCharFromUtf8(&c, s, text_end)).c
-            if (c == '\u0000') break
+            if (c == NUL) break
 
             if (c < 32) {
                 if (c == '\n') {
@@ -1257,7 +1271,7 @@ class Font {
             val c = text[s]
             /*  JVM imgui specific, not 0x80 because on jvm we have Unicode with surrogates characters (instead of utf8)
                     https://www.ibm.com/developerworks/library/j-unicode/index.html             */
-            if (c < Char.MIN_SURROGATE)
+            if (c < Char.MIN_HIGH_SURROGATE)
                 s += 1
             else {
                 TODO("Probabily surrogate character")
@@ -1392,7 +1406,7 @@ class Font {
     fun addGlyph(codepoint: Int, x0: Float, y0: Float, x1: Float, y1: Float, u0: Float, v0: Float, u1: Float, v1: Float, advanceX: Float) {
         val glyph = FontGlyph()
         glyphs.add(glyph)
-        glyph.codepoint = codepoint.uc
+        glyph.codepoint = codepoint.toChar()
         glyph.x0 = x0
         glyph.y0 = y0
         glyph.x1 = x1

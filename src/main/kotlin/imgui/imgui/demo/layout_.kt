@@ -126,8 +126,8 @@ object layout_ {
 
             treeNode("Child regions") {
 
-                var gotoLine = button("Goto")
                 text("Without border")
+                var gotoLine = button("Goto")
                 sameLine()
                 withItemWidth(100) {
                     gotoLine = gotoLine or inputInt("##Line", ::line, 0, 0, Itf.EnterReturnsTrue.i)
@@ -412,7 +412,7 @@ object layout_ {
                     /*  Demonstrate a trick: you can use begin() to set yourself in the context of another window (here
                         we are already out of your child window) */
                     beginChild("scrolling")
-                    scrollX = scrollX + scrollXDelta    // TODO bug
+                    scrollX = scrollX + scrollXDelta    // TODO bug https://youtrack.jetbrains.com/issue/KT-21343 wait for 1.2.20 EAP
                     end()
                 }
             }

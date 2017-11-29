@@ -20,7 +20,9 @@ import gln.vertexArray.glBindVertexArray
 import gln.vertexArray.glVertexAttribPointer
 import gln.vertexArray.withVertexArray
 import imgui.*
+import imgui.Context as g
 import org.lwjgl.glfw.GLFW.*
+import org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.opengl.GL13.*
 import org.lwjgl.opengl.GL14.*
@@ -28,6 +30,12 @@ import org.lwjgl.opengl.GL15.*
 import org.lwjgl.opengl.GL20.*
 import org.lwjgl.opengl.GL30.*
 import org.lwjgl.opengl.GL33.glBindSampler
+import org.lwjgl.system.Callback
+import org.lwjgl.system.MemoryUtil.NULL
+import org.lwjgl.system.Platform
+import org.lwjgl.system.windows.RECT
+import org.lwjgl.system.windows.User32.*
+import org.lwjgl.system.windows.WindowProc
 import uno.buffer.bufferBig
 import uno.buffer.destroy
 import uno.buffer.intBufferBig
@@ -92,8 +100,8 @@ object LwjglGL3 {
             window.scrollCallback = scrollCallback
             window.keyCallback = keyCallback
             window.charCallback = charCallback // TODO check if used (jogl doesnt have)
+            imeListner.install(window.handle)
         }
-
         return true
     }
 

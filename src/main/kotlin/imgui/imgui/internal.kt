@@ -2,6 +2,7 @@ package imgui.imgui
 
 import gli_.has
 import gli_.hasnt
+import glm_.c
 import glm_.f
 import glm_.func.common.max
 import glm_.func.common.min
@@ -23,7 +24,6 @@ import imgui.ImGui.colorButton
 import imgui.ImGui.contentRegionMax
 import imgui.ImGui.dragFloat
 import imgui.ImGui.dragInt
-import imgui.ImGui.end
 import imgui.ImGui.endChildFrame
 import imgui.ImGui.endGroup
 import imgui.ImGui.endPopup
@@ -48,7 +48,6 @@ import imgui.ImGui.pushClipRect
 import imgui.ImGui.pushFont
 import imgui.ImGui.pushId
 import imgui.ImGui.pushItemWidth
-import imgui.ImGui.pushStyleVar
 import imgui.ImGui.radioButton
 import imgui.ImGui.sameLine
 import imgui.ImGui.scrollMaxY
@@ -1204,10 +1203,7 @@ interface imgui_internal {
         pushMultiItemsWidths(component)
         for (i in 0 until component) {
             pushId(i)
-            withFloat(v, i) { f ->
-                val res = sliderFloat("##v", f, vMin, vMax, displayFormat, power)
-                valueChanged = valueChanged || res
-            }
+            withFloat(v, i) { valueChanged = sliderFloat("##v", it, vMin, vMax, displayFormat, power) || valueChanged }
             sameLine(0f, style.itemInnerSpacing.x)
             popId()
             popItemWidth()
@@ -1229,12 +1225,7 @@ interface imgui_internal {
         pushMultiItemsWidths(components)
         for (i in 0 until components) {
             pushId(i)
-            withInt { int ->
-                int.set(v[i])
-                val res = sliderInt("##v", int, vMin, vMax, displayFormat)
-                valueChanged = valueChanged || res
-                v[i] = int()
-            }
+            withInt(v, i) { valueChanged = sliderInt("##v", it, vMin, vMax, displayFormat) || valueChanged }
             sameLine(0f, style.itemInnerSpacing.x)
             popId()
             popItemWidth()
@@ -1333,9 +1324,7 @@ interface imgui_internal {
         pushMultiItemsWidths(components)
         for (i in 0 until components) {
             pushId(i)
-            withFloat(v, i) { f ->
-                valueChanged = valueChanged or dragFloat("##v", f, vSpeed, vMin, vMax, displayFormat, power)
-            }
+            withFloat(v, i) { valueChanged = dragFloat("##v", it, vSpeed, vMin, vMax, displayFormat, power) || valueChanged }
             sameLine(0f, style.itemInnerSpacing.x)
             popId()
             popItemWidth()
@@ -1358,11 +1347,7 @@ interface imgui_internal {
         pushMultiItemsWidths(components)
         for (i in 0 until components) {
             pushId(i)
-            withInt { int ->
-                int.set(v[i])
-                valueChanged = valueChanged or dragInt("##v", int, vSpeed, vMin, vMax, displayFormat)
-                v[i] = int()
-            }
+            withInt(v, i) { valueChanged = dragInt("##v", it, vSpeed, vMin, vMax, displayFormat) || valueChanged }
             sameLine(0f, style.itemInnerSpacing.x)
             popId()
             popItemWidth()
@@ -1441,14 +1426,24 @@ interface imgui_internal {
         val focusRequestedByTab = focusRequested && !focusRequestedByCode
 
         val userClicked = hovered && IO.mouseClicked[0]
-        val userScrolled = isMultiline && g.activeId == 0 && editState.id == id &&
-                g.activeIdPreviousFrame == drawWindow.getIdNoKeepAlive("#SCROLLY")
+        val userScrolled = isMultiline && g.activeId == 0 && editState.id == id && g.activeIdPreviousFrame == drawWindow.getIdNoKeepAlive("#SCROLLY")
 
         var clearActiveId = false
 
         var selectAll = g.activeId != id && flags has Itf.AutoSelectAll
-        if (focusRequested || userClicked || userScrolled) {
-            if (g.activeId != id) {
+//        println(g.imeLastKey)
+        if (focusRequested || userClicked || userScrolled || g.imeLastKey != 0) {
+            if (g.activeId != id || g.imeLastKey != 0) {
+                // JVM, put char if no more in ime mode and last key is valid
+//                println("${g.imeInProgress}, ${g.imeLastKey}")
+                if(!g.imeInProgress && g.imeLastKey != 0) {
+                    for(i in 0 until buf.size)
+                        if(buf[i] == NUL) {
+                            buf[i] = g.imeLastKey.c
+                            break
+                        }
+                    g.imeLastKey = 0
+                }
                 /*  Start edition
                     Take a copy of the initial buffer value (both in original UTF-8 format and converted to wchar)
                     From the moment we focused we are ignoring the content of 'buf' (unless we are in read-only mode)   */
@@ -1457,9 +1452,8 @@ interface imgui_internal {
                 editState.text = CharArray(buf.size)
                 editState.initialText = CharArray(buf.size)
                 // UTF-8. we use +1 to make sure that .Data isn't NULL so it doesn't crash. TODO check if needed
-//                editState.initialText.add('\u0000')
+//                editState.initialText.add(NUL)
                 editState.initialText strncpy buf
-                var bufEnd = 0
                 editState.curLenW = editState.text.textStr(buf) // TODO check if ImTextStrFromUtf8 needed
                 /*  We can't get the result from ImFormatString() above because it is not UTF-8 aware.
                     Here we'll cut off malformed UTF-8.                 */
@@ -1478,8 +1472,7 @@ interface imgui_internal {
                     editState.id = id
                     editState.scrollX = 0f
                     editState.state.clear(!isMultiline)
-                    if (!isMultiline && focusRequestedByCode)
-                        selectAll = true
+                    if (!isMultiline && focusRequestedByCode) selectAll = true
                 }
                 if (flags has Itf.AlwaysInsertMode)
                     editState.state.insertMode = true
@@ -1498,10 +1491,9 @@ interface imgui_internal {
         if (g.activeId == id) {
 
             if (!isEditable && !g.activeIdIsJustActivated) {
-
                 TODO()
                 // When read-only we always use the live data passed to the function
-//                editState.text.add('\u0000')
+//                editState.text.add(NUL)
 //                const char* buf_end = NULL
 //                        editState.CurLenW = ImTextStrFromUtf8(editState.Text.Data, editState.Text.Size, buf, NULL, &buf_end)
 //                editState.CurLenA = (int)(buf_end - buf)
@@ -1550,18 +1542,15 @@ interface imgui_internal {
                     We ignore CTRL inputs, but need to allow CTRL+ALT as some keyboards (e.g. German) use AltGR - which
                     is Alt+Ctrl - to input certain characters.  */
                 if (!(IO.keyCtrl && !IO.keyAlt) && isEditable)
-                    for (n in IO.inputCharacters.indices) {
-                        var c = IO.inputCharacters[n].i
-                        if (c == 0) continue
-                        // Insert character if they pass filtering
-                        val pChar = intArrayOf(c)
-                        if (!inputTextFilterCharacter(pChar, flags/*, callback, user_data*/))
-                            continue
-                        c = pChar[0]
-                        editState.onKeyPressed(c)
+                    IO.inputCharacters.filter { it != NUL }.map {
+                        withChar { c ->
+                            // Insert character if they pass filtering
+                            if (inputTextFilterCharacter(c.apply { set(it) }, flags/*, callback, user_data*/))
+                                editState.onKeyPressed(c().i)
+                        }
                     }
                 // Consume characters
-                IO.inputCharacters.fill('\u0000')
+                IO.inputCharacters.fill(NUL)
             }
         }
 
@@ -1578,18 +1567,16 @@ interface imgui_internal {
             val isStartendKeyDown = IO.optMacOSXBehaviors && IO.keySuper && !IO.keyCtrl && !IO.keyAlt
 
             when {
-                Key.LeftArrow.isPressed -> editState.onKeyPressed(
-                        when {
-                            isStartendKeyDown -> K.LINESTART
-                            isWordmoveKeyDown -> K.WORDLEFT
-                            else -> K.LEFT
-                        } or kMask)
-                Key.RightArrow.isPressed -> editState.onKeyPressed(
-                        when {
-                            isStartendKeyDown -> K.LINEEND
-                            isWordmoveKeyDown -> K.WORDRIGHT
-                            else -> K.RIGHT
-                        } or kMask)
+                Key.LeftArrow.isPressed -> editState.onKeyPressed(when {
+                    isStartendKeyDown -> K.LINESTART
+                    isWordmoveKeyDown -> K.WORDLEFT
+                    else -> K.LEFT
+                } or kMask)
+                Key.RightArrow.isPressed -> editState.onKeyPressed(when {
+                    isStartendKeyDown -> K.LINEEND
+                    isWordmoveKeyDown -> K.WORDRIGHT
+                    else -> K.RIGHT
+                } or kMask)
                 Key.UpArrow.isPressed && isMultiline ->
                     if (IO.keyCtrl)
                         drawWindow.setScrollY(glm.max(drawWindow.scroll.y - g.fontSize, 0f))
@@ -1604,12 +1591,11 @@ interface imgui_internal {
                 Key.End.isPressed -> editState.onKeyPressed((if (IO.keyCtrl) K.TEXTEND else K.LINEEND) or kMask)
                 Key.Delete.isPressed && isEditable -> editState.onKeyPressed(K.DELETE or kMask)
                 Key.Backspace.isPressed && isEditable -> {
-                    if (!editState.hasSelection) {
+                    if (!editState.hasSelection)
                         if (isWordmoveKeyDown)
                             editState.onKeyPressed(K.WORDLEFT or K.SHIFT)
                         else if (IO.optMacOSXBehaviors && IO.keySuper && !IO.keyAlt && !IO.keyCtrl)
                             editState.onKeyPressed(K.LINESTART or K.SHIFT)
-                    }
                     editState.onKeyPressed(K.BACKSPACE or kMask)
                 }
                 Key.Enter.isPressed -> {
@@ -1706,13 +1692,10 @@ interface imgui_internal {
         }
         if (g.activeId == id) {
 
-            if (cancelEdit)
-            // Restore initial value
-                if (isEditable) {
-                    TODO()
-//                        ImStrncpy(buf, editState.InitialText.Data, buf_size)
-//                        valueChanged = true
-                }
+            if (cancelEdit && isEditable) { // Restore initial value
+                for (c in 0 until buf.size) buf[c] = editState.initialText[c]
+                valueChanged = true
+            }
 
             /*  When using `InputTextFlags.EnterReturnsTrue` as a special case we reapply the live buffer back to the
                 input buffer before clearing ActiveId, even though strictly speaking it wasn't modified on this frame.
@@ -1725,11 +1708,8 @@ interface imgui_internal {
                 // Note that as soon as the input box is active, the in-widget value gets priority over any underlying modification of the input buffer
                 // FIXME: We actually always render 'buf' when calling DrawList->AddText, making the comment above incorrect.
                 // FIXME-OPT: CPU waste to do this every time the widget is active, should mark dirty state from the stb_textedit callbacks.
-                if (isEditable) {
-                    TODO()
-//                    editState.empTextBuffer.resize(edit_state.Text.Size * 4);
-//                    ImTextStrToUtf8(edit_state.TempTextBuffer.Data, edit_state.TempTextBuffer.Size, edit_state.Text.Data, NULL);
-                }
+                if (isEditable)
+                    editState.tempTextBuffer = CharArray(editState.text.size * 4, { editState.text.getOrElse(it, { NUL }) })
 
                 // User callback
                 if (flags has (Itf.CallbackCompletion or Itf.CallbackHistory or Itf.CallbackAlways)) {
@@ -1799,7 +1779,7 @@ interface imgui_internal {
                 }
                 // Copy back to user buffer
                 if (isEditable && !Arrays.equals(editState.tempTextBuffer, buf)) {
-                    repeat(buf.size) { buf[it] = editState.tempTextBuffer[it] }
+                    for(i in 0 until buf.size) buf[i] = editState.tempTextBuffer[i]
                     valueChanged = true
                 }
             }
@@ -1852,8 +1832,9 @@ interface imgui_internal {
                 // In multi-line mode, we never exit the loop until all lines are counted, so add one extra to the searchesRemaining counter.
                 if (isMultiline) searchesRemaining++
                 var lineCount = 0
-                for (s in text.indices)
-                    if (text[s] == '\n') {
+                var s = 0
+                while (s < text.size && text[s] != NUL)
+                    if (text[s++] == '\n') {
                         lineCount++
                         if (searchesResultLineNumber[0] == -1 && s >= searchesInputPtr[0]) {
                             searchesResultLineNumber[0] = lineCount
@@ -1870,13 +1851,11 @@ interface imgui_internal {
 
                 // Calculate 2d position by finding the beginning of the line and measuring distance
                 var start = text.beginOfLine(searchesInputPtr[0])
-                var length = text.size - start
-                cursorOffset.x = inputTextCalcTextSizeW(String(text, start, length), searchesInputPtr[0]).x
+                cursorOffset.x = inputTextCalcTextSizeW(text, start, searchesInputPtr[0]).x
                 cursorOffset.y = searchesResultLineNumber[0] * g.fontSize
                 if (searchesResultLineNumber[1] >= 0) {
                     start = text.beginOfLine(searchesInputPtr[1])
-                    length = text.size - start
-                    selectStartOffset.x = inputTextCalcTextSizeW(String(text, start, length), searchesInputPtr[1]).x
+                    selectStartOffset.x = inputTextCalcTextSizeW(text, start, searchesInputPtr[1]).x
                     selectStartOffset.y = searchesResultLineNumber[1] * g.fontSize
                 }
 
@@ -1931,11 +1910,11 @@ interface imgui_internal {
                             if (text[p++] == '\n')
                                 break
                     } else {
-                        val start = text.beginOfLine(p)
-                        val end = text.size - start
-                        val rectSize = inputTextCalcTextSizeW(String(text, start, end), textSelectedEnd, stopOnNewLine = true)
+                        val rectSize = withInt {
+                            inputTextCalcTextSizeW(text, p, textSelectedEnd, it, stopOnNewLine = true).also { p = it() }
+                        }
                         // So we can see selected empty lines
-                        if (rectSize.x <= 0f) rectSize.x = (g.font.getCharAdvance(' ') * 0.5f).i.f
+                        if (rectSize.x <= 0f) rectSize.x = (g.font.getCharAdvance_aaaaa(' ') * 0.5f).i.f
                         val rect = Rect(rectPos + Vec2(0f, bgOffYUp - g.fontSize), rectPos + Vec2(rectSize.x, bgOffYDn))
                         val clipRect_ = Rect(clipRect)
                         rect.clipWith(clipRect_)
@@ -1948,7 +1927,7 @@ interface imgui_internal {
             }
 
             drawWindow.drawList.addText(g.font, g.fontSize, renderPos - renderScroll, Col.Text.u32, bufDisplay,
-                    editState.curLenA, 0f, if (isMultiline) null else clipRect)
+                    editState.curLenA, 0f, clipRect.takeIf { isMultiline })
 
             // Draw blinking cursor
             val cursorIsVisible = !IO.optCursorBlink || g.inputTextState.cursorAnim <= 0f || glm.mod(g.inputTextState.cursorAnim, 1.2f) <= 0.8f
@@ -2000,9 +1979,7 @@ interface imgui_internal {
         pushMultiItemsWidths(components)
         for (i in 0 until components) {
             pushId(i)
-            withFloat(v, i) { f ->
-                valueChanged = valueChanged or inputFloat("##v", f, 0f, 0f, decimalPrecision, extraFlags)
-            }
+            withFloat(v, i) { valueChanged = inputFloat("##v", it, 0f, 0f, decimalPrecision, extraFlags) || valueChanged }
             sameLine(0f, style.itemInnerSpacing.x)
             popId()
             popItemWidth()
@@ -2023,11 +2000,7 @@ interface imgui_internal {
         pushMultiItemsWidths(components)
         for (i in 0 until components) {
             pushId(i)
-            withInt { int ->
-                int.set(v[i])
-                valueChanged = valueChanged or inputInt("##v", int, 0, 0, extraFlags)
-                v[i] = int()
-            }
+            withInt(v, i) { valueChanged = inputInt("##v", it, 0, 0, extraFlags) || valueChanged }
             sameLine(0f, style.itemInnerSpacing.x)
             popId()
             popItemWidth()
@@ -2101,8 +2074,8 @@ interface imgui_internal {
 
     /** Create text input in place of a slider (when CTRL+Clicking on slider)
      *  FIXME: Logic is messy and confusing. */
-    fun inputScalarAsWidgetReplacement(aabb: Rect, label: String, dataType: DataType, data: IntArray, id: Int, decimalPrecision: Int)
-            : Boolean {
+    fun inputScalarAsWidgetReplacement(aabb: Rect, label: String, dataType: DataType, data: KMutableProperty0<Int>, id: Int,
+                                       decimalPrecision: Int): Boolean {
 
         val window = currentWindow
 
@@ -2121,9 +2094,9 @@ interface imgui_internal {
             g.scalarAsInputTextId = g.activeId
             setHoveredId(id)
         }
-        if (textValueChanged)
-            return dataTypeApplyOpFromText(buf, g.inputTextState.initialText, dataType, data)
-        return false
+        return if (textValueChanged)
+            dataTypeApplyOpFromText(buf, g.inputTextState.initialText, dataType, data)
+        else false
     }
 
     /** Note: only access 3 floats if ImGuiColorEditFlags_NoAlpha flag is set.   */
@@ -2561,4 +2534,9 @@ private inline fun <R> withInt(ints: IntArray, ptr: Int, block: (KMutablePropert
 private inline fun <R> withInt(block: (KMutableProperty0<Int>) -> R): R {
     Ref.iPtr++
     return block(Ref::int).also { Ref.iPtr-- }
+}
+
+private inline fun <R> withChar(block: (KMutableProperty0<Char>) -> R): R {
+    Ref.cPtr++
+    return block(Ref::char).also { Ref.cPtr-- }
 }

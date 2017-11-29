@@ -76,27 +76,30 @@ class TextEditState {
     fun getChar(idx: Int) = text[idx]
     fun getWidth(lineStartIdx: Int, charIdx: Int): Float {
         val c = text[lineStartIdx + charIdx]
-        return if (c == '\n') -1f else Context.font.getCharAdvance(c) * (Context.fontSize / Context.font.fontSize)
+        return if (c == '\n') -1f else Context.font.getCharAdvance_aaaaa(c) * (Context.fontSize / Context.font.fontSize)
     }
 
     fun keyToText(key: Int) = if (key >= 0x10000) 0 else key
     val newLine get() = '\n'
 
+    var textRemaining = 0
+
     fun layout(r: Row, lineStartIdx: Int) {
-        val textRemaining = IntArray(1)
-        val size = inputTextCalcTextSizeW(String(text, lineStartIdx, text.size - lineStartIdx), curLenW, textRemaining, null, true)
+
+        val size = inputTextCalcTextSizeW(text, lineStartIdx, curLenW, ::textRemaining, null, true)
         with(r) {
             r.x0 = 0f
             r.x1 = size.x
             r.baselineYDelta = size.y
             r.yMin = 0f
             r.yMax = size.y
-            r.numChars = textRemaining[0] - lineStartIdx
+            r.numChars = textRemaining - lineStartIdx
         }
     }
 
-    val Char.isSeparator get() = this.isSpace || this == ',' || this == ';' || this == '(' || this == ')' ||
-            this == '{' || this == '}' || this == '[' || this == ']' || this == '|'
+    val Char.isSeparator
+        get() = this.isSpace || this == ',' || this == ';' || this == '(' || this == ')' ||
+                this == '{' || this == '}' || this == '[' || this == ']' || this == '|'
 
     fun isWordBoundaryFromRight(idx: Int) = if (idx > 0) text[idx - 1].isSeparator && !text[idx].isSeparator else true
 
@@ -124,28 +127,25 @@ class TextEditState {
         // Offset remaining text
         for (c in pos + n until text.size)
             text[dst++] = text[c]
-        text[dst] = '\u0000'
+        text[dst] = NUL
     }
 
     fun insertChars(pos: Int, newText: CharArray, ptr: Int, newTextLen: Int): Boolean {
 
         val textLen = curLenW
         assert(pos <= textLen)
-        if (newTextLen + textLen /* + 1 TODO check*/ > text.size)
-            return false
+        if (newTextLen + textLen + 1 > text.size) return false
 
         val newTextLenUtf8 = newTextLen //TODO check textCountUtf8BytesFromStr(new_text, new_text + newTextLen)
-        if (newTextLenUtf8 + curLenA > bufSizeA)
-            return false
+        if (newTextLenUtf8 + curLenA > bufSizeA) return false
 
         if (pos != textLen)
             TODO()  //memmove(text + pos + new_text_len, text + pos, (size_t)(text_len - pos) * sizeof(ImWchar));
-        for (i in 0 until newTextLen)
-            text[pos + i] = newText[i]
+        for (i in 0 until newTextLen) text[pos + i] = newText[i]
 
         curLenW += newTextLen
         curLenA += newTextLenUtf8
-        text[curLenW] = '\u0000'
+        text[curLenW] = NUL
 
         return true
     }
@@ -366,9 +366,9 @@ class TextEditState {
         var initialized = false
         var hasPreferredX = false
         var singleLine = false
-        var padding1 = '\u0000'
-        var padding2 = '\u0000'
-        var padding3 = '\u0000'
+        var padding1 = NUL
+        var padding2 = NUL
+        var padding3 = NUL
         /** this determines where the cursor up/down tries to seek to along x   */
         var preferredX = 0f
         val undostate = UndoState()
@@ -795,7 +795,6 @@ class TextEditState {
     /** API key: process a keyboard input   */
     fun key(key: Int): Unit = with(state) {
         when (key) {
-//            K.INSERT:            state->insert_mode = !state->insert_mode
             K.UNDO -> {
                 undo()
                 hasPreferredX = false
@@ -926,8 +925,8 @@ class TextEditState {
                     cursor = find.prevFirst
                     layout(row, cursor)
                     x = row.x0
-                    for (i in 0 until row.numChars) {
-                        val dx = getWidth(find.prevFirst, i)
+                    while (i < row.numChars) {
+                        val dx = getWidth(find.prevFirst, i++)
                         if (dx == GETWIDTH_NEWLINE)
                             break
                         x += dx
@@ -1029,10 +1028,8 @@ class TextEditState {
                 val c = keyToText(key)
                 if (c > 0) {
                     val ch = c.c
-
                     // can't add newline in single-line mode
-                    if (ch == '\n' && singleLine)
-                        return@with
+                    if (ch == '\n' && singleLine) return@with
 
                     if (insertMode && !hasSelection && cursor < stringLen) {
                         makeundoReplace(cursor, 1, 1)
@@ -1051,9 +1048,6 @@ class TextEditState {
                     }
                 }
             }
-//// @TODO:
-////    STB_TEXTEDIT_K_PGUP      - move cursor up a page
-////    STB_TEXTEDIT_K_PGDOWN    - move cursor down a page
         }
     }
 }

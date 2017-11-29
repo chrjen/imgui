@@ -63,6 +63,20 @@ Also see the [Mega screenshots](https://github.com/ocornut/imgui/issues/1273) fo
 
 ![Sample](https://cloud.githubusercontent.com/assets/8225057/20628927/33e14cac-b329-11e6-80f6-9524e93b048a.png)
 
+ImGui supports also other languages, such as japanese, initiliazed [here](https://github.com/kotlin-graphics/imgui/blob/master/src/test/kotlin/imgui/test_lwjgl.kt#L67) as:
+
+```kotlin
+IO.fonts.addFontFromFileTTF("extraFonts/ArialUni.ttf", 18f, glyphRanges = IO.fonts.glyphRangesJapanese)!!
+```
+or [here](https://github.com/kotlin-graphics/imgui/blob/master/src/test/java/imgui/Test_lwjgl.java#L50-L51)
+```java
+Font font = io.getFonts().addFontFromFileTTF("extraFonts/ArialUni.ttf", 18f, new FontConfig(), io.getFonts().getGlyphRangesJapanese());
+assert (font != null);
+```
+
+![Imgur](https://i.imgur.com/vul0VbT.png?1)
+
+
 ### References
 ----------
 
@@ -102,7 +116,13 @@ Simply follow this [short wiki](https://github.com/kotlin-graphics/imgui/wiki/Us
 
 ### Status:
 
-90% ported, text inputs handling and few other small things
+90% ported
+
+Weak/bugged: text inputs handling and few other small things
+
+Not yet implemented, foreign languages
+
+Not yet tested, other fonts
 
 To check what has been already ported and working, simply run one of the tests in Kotlin:
 

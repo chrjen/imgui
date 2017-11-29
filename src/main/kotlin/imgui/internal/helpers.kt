@@ -6,6 +6,7 @@ import glm_.i
 import glm_.vec2.Vec2
 import glm_.vec4.Vec4
 import glm_.xor
+import imgui.NUL
 import imgui.Context as g
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -119,7 +120,14 @@ val crc32Lut = IntArray(256, {
     crc
 })
 
-//IMGUI_API void*         ImFileLoadToMemory(const char* filename, const char* file_open_mode, int* out_file_size = NULL, int padding_bytes = 0);
+fun fileLoadToCharArray(filename: String, paddingBytes: Int = 0) = ClassLoader.getSystemResourceAsStream(filename)?.use {
+    val bytes = it.readBytes()
+    CharArray(bytes.size, { bytes[it].c })
+}
+
+fun fileLoadToLines(filename: String) = ClassLoader.getSystemResourceAsStream(filename)?.use { it.bufferedReader().readLines() }
+
+
 //IMGUI_API FILE*         ImFileOpen(const char* filename, const char* file_open_mode);
 
 
@@ -203,9 +211,9 @@ val CharArray.strlenW: Int
 
 /** Find beginning-of-line  */
 fun CharArray.beginOfLine(midLine: Int): Int {
-    var midLine = midLine
-    while (midLine > 0 && this[midLine - 1] != '\n') midLine--
-    return midLine
+    var res = midLine
+    while (res > 0 && this[res - 1] != '\n') res--
+    return res
 }
 //IMGUI_API const char*   ImStristr(const char* haystack, const char* haystack_end, const char* needle, const char* needle_end);
 //IMGUI_API int           ImFormatString(char* buf, int buf_size, const char* fmt, ...) IM_PRINTFARGS(3);
@@ -246,7 +254,7 @@ infix fun CharArray.strncpy(src: CharArray) = strncpy(src, size)
 fun CharArray.strncpy(src: CharArray, count: Int) {
     if (count < 1) return
     for (i in 0 until count) {
-        if (src[i] == '\u0000') break
+        if (src[i] == NUL) break
         this[i] = src[i]
     }
 }
@@ -254,7 +262,7 @@ fun CharArray.strncpy(src: CharArray, count: Int) {
 fun CharArray.textStr(src: CharArray): Int {
     var i = 0
     while (i < size) {
-        if (src[i] == '\u0000') break
+        if (src[i] == NUL) break
         this[i] = src[i++]
     }
     return i
@@ -263,7 +271,7 @@ fun CharArray.textStr(src: CharArray): Int {
 val CharArray.strlen: Int
     get() {
         var i = 0
-        while (i < size && this[i] != '\u0000') i++
+        while (i < size && this[i] != NUL) i++
         return i
     }
 

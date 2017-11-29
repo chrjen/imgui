@@ -1,7 +1,10 @@
 package imgui
 
 import gli_.has
-import glm_.*
+import glm_.compareTo
+import glm_.f
+import glm_.glm
+import glm_.i
 import glm_.vec2.Vec2
 import glm_.vec2.Vec2i
 import imgui.Context.style
@@ -10,6 +13,11 @@ import imgui.internal.*
 import uno.kotlin.isPrintable
 import java.io.File
 import java.nio.file.Paths
+import java.util.*
+import kotlin.collections.filter
+import kotlin.collections.firstOrNull
+import kotlin.collections.forEach
+import kotlin.collections.set
 import kotlin.reflect.KMutableProperty0
 import imgui.Context as g
 import imgui.InputTextFlags as Itf
@@ -207,8 +215,7 @@ fun addWindowSettings(name: String) = IniData().apply {
 fun loadIniSettingsFromDisk(iniFilename: String?) {
     if (iniFilename == null) return
     var settings: IniData? = null
-    val file = Paths.get(iniFilename).toFile()
-    if (file.exists()) file.readLines().filter { it.isNotEmpty() }.forEach { s ->
+    fileLoadToLines(iniFilename)?.filter { it.isNotEmpty() }?.forEach { s ->
         if (s[0] == '[' && s.last() == ']') {
             val name = s.substring(1, s.lastIndex)
             settings = findWindowSettings(name) ?: addWindowSettings(name)
@@ -353,9 +360,9 @@ fun findBestPopupWindowPos(basePos: Vec2, window: Window, rInner: Rect): Vec2 {
 }
 
 /** Return false to discard a character.    */
-fun inputTextFilterCharacter(pChar: IntArray, flags: Int/*, ImGuiTextEditCallback callback, void* user_data*/): Boolean {
+fun inputTextFilterCharacter(char: KMutableProperty0<Char>, flags: Int/*, ImGuiTextEditCallback callback, void* user_data*/): Boolean {
 
-    var c = pChar[0].c
+    var c = char()
 
     if (c < 128 && c != ' ' && !c.isPrintable) {
         var pass = false
@@ -379,7 +386,7 @@ fun inputTextFilterCharacter(pChar: IntArray, flags: Int/*, ImGuiTextEditCallbac
 
         if (flags has Itf.CharsUppercase && c in 'a'..'z') {
             c += 'A' - 'a'
-            pChar[0] = c.i
+            char.set(c)
         }
 
         if (flags has Itf.CharsNoBlank && c.isSpace) return false
@@ -416,8 +423,8 @@ fun inputTextCalcTextLenAndLineCount(text: String, outTextEnd: IntArray): Int {
     return lineCount
 }
 
-fun inputTextCalcTextSizeW(text: String, textEnd: Int, remaining: IntArray? = null, outOffset: Vec2? = null,
-                           stopOnNewLine: Boolean = false): Vec2 {
+fun inputTextCalcTextSizeW(text: CharArray, textBegin: Int, textEnd: Int, remaining: KMutableProperty0<Int>? = null,
+                           outOffset: Vec2? = null, stopOnNewLine: Boolean = false): Vec2 {
 
     val font = g.font
     val lineHeight = g.fontSize
@@ -426,7 +433,7 @@ fun inputTextCalcTextSizeW(text: String, textEnd: Int, remaining: IntArray? = nu
     val textSize = Vec2()
     var lineWidth = 0f
 
-    var s = 0
+    var s = textBegin
     while (s < textEnd) {
         val c = text[s++]
         if (c == '\n') {
@@ -439,7 +446,7 @@ fun inputTextCalcTextSizeW(text: String, textEnd: Int, remaining: IntArray? = nu
         }
         if (c == '\r') continue
 
-        val charWidth: Float = font.getCharAdvance(c) * scale  //TODO rename back
+        val charWidth: Float = font.getCharAdvance_aaaaa(c) * scale  //TODO rename back
         lineWidth += charWidth
     }
 
@@ -455,7 +462,7 @@ fun inputTextCalcTextSizeW(text: String, textEnd: Int, remaining: IntArray? = nu
     if (lineWidth > 0 || textSize.y == 0f)  // whereas size.y will ignore the trailing \n
         textSize.y += lineHeight
 
-    remaining?.set(0, s)
+    remaining?.set(s)
 
     return textSize
 }
@@ -485,6 +492,15 @@ fun IntArray.format(dataType: DataType, decimalPrecision: Int, buf: CharArray) =
 /*  Ideally we'd have a minimum decimal precision of 1 to visually denote that it is a float, while hiding
     non-significant digits?         */
     DataType.Float -> "%${if (decimalPrecision < 0) "" else ".$decimalPrecision"}f".format(style.locale, glm.intBitsToFloat(this[0]))
+    else -> throw Error("unsupported format data type")
+}.toCharArray(buf)
+
+fun KMutableProperty0<Int>.format(dataType: DataType, decimalPrecision: Int, buf: CharArray) = when (dataType) {
+
+    DataType.Int -> "%${if (decimalPrecision < 0) "" else ".$decimalPrecision"}d".format(style.locale, this())
+/*  Ideally we'd have a minimum decimal precision of 1 to visually denote that it is a float, while hiding
+    non-significant digits?         */
+    DataType.Float -> "%${if (decimalPrecision < 0) "" else ".$decimalPrecision"}f".format(style.locale, glm.intBitsToFloat(this()))
     else -> throw Error("unsupported format data type")
 }.toCharArray(buf)
 
@@ -536,15 +552,14 @@ fun dataTypeApplyOpFromText(buf: CharArray, initialValueBuf: CharArray, dataType
 //        op = 0.c
 //
 //    if (buf[s] == 0.c) return false
-
-    val seq = String(buf).replace("\\s+", "").split(Regex("-+\\*/"))
-    return when (dataType) {
-
+    val seq = String(buf).replace(Regex("\\s+"), "").replace("$NUL", "").split(Regex("-+\\*/"))
+    return if (buf[0] == NUL) false
+    else when (dataType) {
         DataType.Int -> {
             val scalarFormat = scalarFormat ?: "%d"
             var v = data()
             val oldV = v
-            val a = seq[0].i
+            val a = Scanner(seq[0]).nextInt()
 
             if (seq.size == 2) {   // TODO support more complex operations? i.e: a + b * c
 
@@ -552,15 +567,13 @@ fun dataTypeApplyOpFromText(buf: CharArray, initialValueBuf: CharArray, dataType
                 /*  Store operand b in a float so we can use fractional value for multipliers (*1.1), but constant
                     always parsed as integer so we can fit big integers (e.g. 2000000003) past float precision  */
                 val b = seq[2].f
-                when (op) {
-                    '+' -> v = (a + b).i    // Add (use "+-" to subtract)
-                    '*' -> v = (a * b).i    // Multiply
-                    '/' -> v = (a / b).i    // Divide   TODO / 0 will throw
+                v = when (op) {
+                    '+' -> (a + b).i    // Add (use "+-" to subtract)
+                    '*' -> (a * b).i    // Multiply
+                    '/' -> (a / b).i    // Divide   TODO / 0 will throw
                     else -> throw Error()
                 }
-            } else
-                v = a   // Assign constant
-
+            } else v = a   // Assign constant
             data.set(v)
             oldV != v
         }
@@ -569,21 +582,19 @@ fun dataTypeApplyOpFromText(buf: CharArray, initialValueBuf: CharArray, dataType
             val scalarFormat = scalarFormat ?: "%f"
             var v = glm.intBitsToFloat(data())
             val oldV = v
-            val a = seq[0].f
+            val a = Scanner(seq[0]).nextFloat()
 
             if (seq.size == 2) {   // TODO support more complex operations? i.e: a + b * c
 
                 val op = seq[1][0]
                 val b = seq[2].f
-                when (op) {
-                    '+' -> v = a + b    // Add (use "+-" to subtract)
-                    '*' -> v = a * b    // Multiply
-                    '/' -> v = a / b    // Divide   TODO / 0 will throw
+                v = when (op) {
+                    '+' -> a + b    // Add (use "+-" to subtract)
+                    '*' -> a * b    // Multiply
+                    '/' -> a / b    // Divide   TODO / 0 will throw
                     else -> throw Error()
                 }
-            } else
-                v = a   // Assign constant
-
+            } else v = a   // Assign constant
             data.set(glm.floatBitsToInt(v))
             oldV != v
         }
