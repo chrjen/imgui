@@ -8,9 +8,9 @@ import gln.glClearColor
 import gln.glViewport
 import imgui.functionalProgramming.button
 import imgui.impl.LwjglGL3
-import org.lwjgl.glfw.GLFW.glfwPollEvents
 import org.lwjgl.opengl.GL
-import org.lwjgl.opengl.GL11.*
+import org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT
+import org.lwjgl.opengl.GL11.glClear
 import uno.glfw.GlfwWindow
 import uno.glfw.glfw
 

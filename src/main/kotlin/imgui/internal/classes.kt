@@ -502,8 +502,7 @@ class Window(
     }
 
     fun getId(ptr: Any): Int {
-        val seed = idStack.last()
-        val id = System.identityHashCode(++ptrIndices)
+        val id = System.identityHashCode(ptrId[++ptrIndices])
         keepAliveId(id)
         return id
     }
@@ -619,7 +618,7 @@ class Window(
             }
         }
         if (flags hasnt (Wf.ChildWindow or Wf.AlwaysAutoResize)) {
-            newSize max_ style.windowMinSize
+            newSize maxAssign style.windowMinSize
             // Reduce artifacts with very small windows
             newSize.y = max(newSize.y, titleBarHeight + menuBarHeight + max(0f, style.windowRounding - 1f))
         }

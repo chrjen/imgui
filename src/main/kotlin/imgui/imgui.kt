@@ -1,10 +1,10 @@
 package imgui
 
+import glm_.b
 import glm_.i
 import glm_.vec2.Vec2
 import glm_.vec2.Vec2i
 import imgui.imgui.*
-import imgui.imgui.imgui_demoDebugInfo
 
 // Helpers macros to generate 32-bits encoded colors
 var USE_BGRA_PACKED_COLOR = false
@@ -19,8 +19,6 @@ fun COL32(r: Int, g: Int, b: Int, a: Int) = (a shl COL32_A_SHIFT) or (b shl COL3
 val COL32_WHITE = COL32(255, 255, 255, 255) // Opaque white = 0xFFFFFFFF
 val COL32_BLACK = COL32(0, 0, 0, 255)       // Opaque black
 val COL32_BLACK_TRANS = COL32(0, 0, 0, 0)   // Transparent black = 0x00000000
-
-var _DEBUG = true
 
 val MOUSE_INVALID = -256000f
 
@@ -58,9 +56,8 @@ object ImGui :
     val version = "1.53 WIP"
 }
 
-var debug = 0
-
-var ptrIndices = 0 // TODO move
+var ptrIndices = 0
+val ptrId = Array(512, { java.lang.Byte(it.b) })
 
 // TODO get rid of local top value KMutableProperty in favor of the better with*{} solution
 
