@@ -58,6 +58,7 @@ import imgui.ColorEditFlags as Cef
 import imgui.Context as g
 import imgui.InputTextFlags as Itf
 import imgui.WindowFlags as Wf
+import imgui.internal.DrawCornerFlags as Dcf
 
 /** Widgets: Color Editor/Picker (tip: the ColorEdit* functions have a little colored preview square that can be
  *  left-clicked to open a picker, and right-clicked to open an option menu.)
@@ -153,8 +154,9 @@ interface imgui_widgetsColorEditorPicker {
                 if (n > 0) sameLine(0f, style.itemInnerSpacing.x)
                 if (n + 1 == components) pushItemWidth(wItemLast)
                 if (flags has Cef.Float) {
-                    valueChangedAsFloat = dragFloat(ids[n], f, n, 1f / 255f, 0f, if (hdr) 0f else 1f, fmtTableFloat[fmtIdx][n]) || valueChangedAsFloat
-                    valueChanged = valueChanged || valueChangedAsFloat
+                    // operands inverted to have dragFloat always executed, no matter valueChanged
+                    valueChangedAsFloat = dragFloat(ids[n], f, n, 1f / 255f, 0f, if (hdr) 0f else 1f, fmtTableFloat[fmtIdx][n]) || valueChanged
+                    valueChanged = valueChangedAsFloat
                 } else
                     valueChanged = dragInt(ids[n], i, n, 1f, 0, if (hdr) 0 else 255, fmtTableInt[fmtIdx][n]) || valueChanged
                 if (flags hasnt Cef.NoOptions) openPopupOnItemClick("context")
@@ -452,15 +454,15 @@ interface imgui_widgetsColorEditorPicker {
             for (n in 0..5) {
                 val a0 = n / 6f * 2f * glm.PIf - aeps
                 val a1 = (n + 1f) / 6f * 2f * glm.PIf + aeps
-                val vertStartIdx = drawList._vtxCurrentIdx
+                val vertStartIdx = drawList.vtxBuffer.size
                 drawList.pathArcTo(wheelCenter, (wheelRInner + wheelROuter) * 0.5f, a0, a1, segmentPerArc)
                 drawList.pathStroke(COL32_WHITE, false, wheelThickness)
+                val vertEndIdx = drawList.vtxBuffer.size
 
                 // Paint colors over existing vertices
                 val gradientP0 = Vec2(wheelCenter.x + a0.cos * wheelRInner, wheelCenter.y + a0.sin * wheelRInner)
                 val gradientP1 = Vec2(wheelCenter.x + a1.cos * wheelRInner, wheelCenter.y + a1.sin * wheelRInner)
-                shadeVertsLinearColorGradientKeepAlpha(drawList, drawList._vtxWritePtr - (drawList._vtxCurrentIdx - vertStartIdx),
-                        drawList._vtxWritePtr, gradientP0, gradientP1, hueColors[n], hueColors[n + 1])
+                shadeVertsLinearColorGradientKeepAlpha(drawList.vtxBuffer, vertStartIdx, vertEndIdx, gradientP0, gradientP1, hueColors[n], hueColors[n + 1])
             }
 
             // Render Cursor + preview on Hue Wheel
@@ -566,9 +568,9 @@ interface imgui_widgetsColorEditorPicker {
         if (flags has Cef.AlphaPreviewHalf && col.w < 1f) {
             val midX = ((bbInner.min.x + bbInner.max.x) * 0.5f + 0.5f).i.f
             renderColorRectWithAlphaCheckerboard(Vec2(bbInner.min.x + gridStep, bbInner.min.y), bbInner.max, getColorU32(col),
-                    gridStep, Vec2(-gridStep + off, off), rounding, Corner.TopRight or Corner.BotRight)
+                    gridStep, Vec2(-gridStep + off, off), rounding, Dcf.TopRight or Dcf.BotRight)
             window.drawList.addRectFilled(bbInner.min, Vec2(midX, bbInner.max.y), getColorU32(colWithoutAlpha), rounding,
-                    Corner.TopLeft or Corner.BotLeft)
+                    Dcf.TopLeft or Dcf.BotLeft)
         } else {
             /*  Because getColorU32() multiplies by the global style alpha and we don't want to display a checkerboard 
                 if the source code had no alpha */
@@ -576,7 +578,7 @@ interface imgui_widgetsColorEditorPicker {
             if (colSource.w < 1f)
                 renderColorRectWithAlphaCheckerboard(bbInner.min, bbInner.max, colSource.u32, gridStep, Vec2(off), rounding)
             else
-                window.drawList.addRectFilled(bbInner.min, bbInner.max, getColorU32(colSource), rounding, 0.inv())
+                window.drawList.addRectFilled(bbInner.min, bbInner.max, getColorU32(colSource), rounding, Dcf.All.i)
         }
         if (style.frameBorderSize > 0f)
             renderFrameBorder(bb.min, bb.max, rounding)

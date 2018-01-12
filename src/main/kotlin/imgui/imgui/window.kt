@@ -36,6 +36,7 @@ import imgui.ItemFlags as If
 import imgui.WindowFlags as Wf
 import imgui.internal.ButtonFlags as Bf
 import imgui.internal.LayoutType as Lt
+import imgui.internal.DrawCornerFlags as Dcf
 
 
 interface imgui_window {
@@ -227,10 +228,7 @@ interface imgui_window {
                 }
             }
 
-            // Lock window padding so that altering the borders sizes for children doesn't have side-effects.
-            window.windowPadding put style.windowPadding
-            if (flags has Wf.ChildWindow && flags hasnt (Wf.AlwaysUseWindowPadding or Wf.ComboBox or Wf.Popup) && style.windowBorderSize == 0f)
-                window.windowPadding.y = if (flags has Wf.MenuBar) style.windowPadding.y else 0f
+            // Lock window rounding, border size and rounding so that altering the border sizes for children doesn't have side-effects.
             window.windowRounding = when {
                 flags has Wf.ChildWindow -> style.childRounding
                 flags has Wf.Popup && flags hasnt Wf.Modal -> style.popupRounding
@@ -241,7 +239,9 @@ interface imgui_window {
                 flags has Wf.Popup && flags hasnt Wf.Modal -> style.popupBorderSize
                 else -> style.windowBorderSize
             }
-            val windowPadding = window.windowPadding
+            window.windowPadding put style.windowPadding
+            if (flags has Wf.ChildWindow && flags hasnt (Wf.AlwaysUseWindowPadding or Wf.ComboBox or Wf.Popup) && window.windowBorderSize == 0f)
+                window.windowPadding = Vec2(0f, if(flags has Wf.MenuBar) style.windowPadding.y else 0f)
             val windowRounding = window.windowRounding
             val windowBorderSize = window.windowBorderSize
 
@@ -420,21 +420,23 @@ interface imgui_window {
                 // Window background, Default Alpha
                 window.drawList.addRectFilled(Vec2(window.pos.x, window.pos.y + window.titleBarHeight),
                         Vec2(window.pos + window.size), getWindowBgColorIdxFromFlags(flags).u32, windowRounding,
-                        if (flags has Wf.NoTitleBar) Corner.All.i else Corner.BotLeft or Corner.BotRight)
+                        if (flags has Wf.NoTitleBar) Dcf.All.i else Dcf.Bot.i)
 
                 // Title bar
-                val isFocused = g.navWindow?.rootNonPopupWindow == window.rootNonPopupWindow ?: false
+                val windowIsFocused = g.navWindow?.rootNonPopupWindow == window.rootNonPopupWindow ?: false
                 if (flags hasnt Wf.NoTitleBar)
-                    window.drawList.addRectFilled(titleBarRect.tl, titleBarRect.br,
-                            (if (isFocused) Col.TitleBgActive else Col.TitleBg).u32,
-                            windowRounding, Corner.TopLeft or Corner.TopRight)
+                    window.drawList.addRectFilled(titleBarRect.min, titleBarRect.max,
+                            (if (windowIsFocused) Col.TitleBgActive else Col.TitleBg).u32,
+                            windowRounding, Dcf.Top.i)
 
                 // Menu bar
                 if (flags has Wf.MenuBar) {
                     val menuBarRect = window.menuBarRect()
-                    window.drawList.addRectFilled(menuBarRect.tl, menuBarRect.br, Col.MenuBarBg.u32,
-                            if (flags has Wf.NoTitleBar) windowRounding else 0f, Corner.TopLeft or Corner.TopRight)
-                    if (style.frameBorderSize > 0f)
+                    // Soft clipping, in particular child window don't have minimum size covering the menu bar so this is useful for them.
+                    menuBarRect clipWith window.rect()
+                    val rounding = if(flags has Wf.NoTitleBar) windowRounding else 0f
+                    window.drawList.addRectFilled(menuBarRect.min, menuBarRect.max, Col.MenuBarBg.u32, rounding, Dcf.Top.i)
+                    if (style.frameBorderSize > 0f && menuBarRect.max.y < window.pos.y + window.size.y)
                         window.drawList.addLine(menuBarRect.bl, menuBarRect.br, Col.Border.u32, style.frameBorderSize)
                 }
 
@@ -457,7 +459,7 @@ interface imgui_window {
 
                 // Borders
                 if (windowBorderSize > 0f)
-                    window.drawList.addRect(Vec2(window.pos), window.size + window.pos, Col.Border.u32, windowRounding, 0.inv(), windowBorderSize)
+                    window.drawList.addRect(Vec2(window.pos), window.size + window.pos, Col.Border.u32, windowRounding, Dcf.All.i, windowBorderSize)
                 if (style.frameBorderSize > 0 && flags hasnt Wf.NoTitleBar)
                     window.drawList.addLine(titleBarRect.bl + Vec2(1, -1), titleBarRect.br + Vec2(-1), Col.Border.u32, style.frameBorderSize)
             }

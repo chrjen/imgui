@@ -84,7 +84,6 @@ import imgui.functionalProgramming.popupContextItem
 import imgui.functionalProgramming.popupContextWindow
 import imgui.functionalProgramming.smallButton
 import imgui.functionalProgramming.treeNode
-import imgui.functionalProgramming.window
 import imgui.functionalProgramming.withChild
 import imgui.functionalProgramming.withId
 import imgui.functionalProgramming.withItemWidth
@@ -896,7 +895,7 @@ object FixedOverlay {
         val windowPosPivot = Vec2(if (corner has 1) 1f else 0f, if (corner has 2) 1f else 0f)
         setNextWindowPos(windowPos, Cond.Always, windowPosPivot)
         pushStyleColor(Col.WindowBg, Vec4(0f, 0f, 0f, 0.3f))  // Transparent background
-        window("Example: Fixed Overlay", open, Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings) {
+        withWindow("Example: Fixed Overlay", open, Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings) {
             text("Simple overlay\nin the corner of the screen.\n(right-click to change position)")
             separator()
             text("Mouse Position: (%.1f,%.1f)".format(IO.mousePos.x, IO.mousePos.y))
@@ -1086,20 +1085,17 @@ object StyleEditor {
             style.grabRounding = style.frameRounding    // Make GrabRounding always the same value as FrameRounding
         run {
             windowBorder = style.windowBorderSize > 0f
-            if (checkbox("WindowBorder", ::windowBorder))
-                style.windowBorderSize = if (windowBorder) 1f else 0f
+            if (checkbox("WindowBorder", ::windowBorder)) style.windowBorderSize = if (windowBorder) 1f else 0f
         }
         sameLine()
         run {
             frameBorder = style.frameBorderSize > 0f
-            if (checkbox("FrameBorder", ::frameBorder))
-                style.frameBorderSize = if (frameBorder) 1f else 0f
+            if (checkbox("FrameBorder", ::frameBorder)) style.frameBorderSize = if (frameBorder) 1f else 0f
         }
         sameLine()
         run {
             popupBorder = style.popupBorderSize > 0f
-            if (checkbox("PopupBorder", ::popupBorder))
-                style.popupBorderSize = if (popupBorder) 1f else 0f
+            if (checkbox("PopupBorder", ::popupBorder)) style.popupBorderSize = if (popupBorder) 1f else 0f
         }
 
         // Save/Revert button
