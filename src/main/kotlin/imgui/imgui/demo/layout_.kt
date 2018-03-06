@@ -1,14 +1,15 @@
 package imgui.imgui.demo
 
 import gli_.has
-import imgui.ImGui.u32
 import glm_.f
 import glm_.vec2.Vec2
 import glm_.vec4.Vec4
 import imgui.*
-import imgui.Context.style
+import imgui.ImGui.style
 import imgui.ImGui.alignTextToFramePadding
 import imgui.ImGui.beginChild
+import imgui.ImGui.beginMenu
+import imgui.ImGui.beginMenuBar
 import imgui.ImGui.bullet
 import imgui.ImGui.bulletText
 import imgui.ImGui.button
@@ -24,16 +25,19 @@ import imgui.ImGui.dragVec2
 import imgui.ImGui.dummy
 import imgui.ImGui.end
 import imgui.ImGui.endChild
+import imgui.ImGui.endMenu
+import imgui.ImGui.endMenuBar
 import imgui.ImGui.font
 import imgui.ImGui.fontSize
+import imgui.ImGui.frameHeightWithSpacing
 import imgui.ImGui.getId
 import imgui.ImGui.inputInt
 import imgui.ImGui.invisibleButton
+import imgui.ImGui.io
 import imgui.ImGui.isItemActive
 import imgui.ImGui.isItemHovered
 import imgui.ImGui.isMouseDragging
 import imgui.ImGui.itemRectSize
-import imgui.ImGui.itemsLineHeightWithSpacing
 import imgui.ImGui.listBox
 import imgui.ImGui.listBoxFooter
 import imgui.ImGui.listBoxHeader
@@ -68,17 +72,18 @@ import imgui.ImGui.windowContentRegionWidth
 import imgui.ImGui.windowDrawList
 import imgui.ImGui.windowWidth
 import imgui.functionalProgramming.collapsingHeader
+import imgui.functionalProgramming.menuBar
 import imgui.functionalProgramming.treeNode
 import imgui.functionalProgramming.withChild
 import imgui.functionalProgramming.withGroup
 import imgui.functionalProgramming.withId
 import imgui.functionalProgramming.withItemWidth
 import imgui.functionalProgramming.withStyleVar
-import imgui.imgui.imgui_demoDebugInfo.Companion.showHelpMarker
+import imgui.imgui.imgui_demoDebugInformations.Companion.showExampleMenuFile
+import imgui.imgui.imgui_demoDebugInformations.Companion.showHelpMarker
 import kotlin.math.sin
 import kotlin.reflect.KMutableProperty0
 import imgui.ColorEditFlags as Cef
-import imgui.Context as g
 import imgui.InputTextFlags as Itf
 import imgui.SelectableFlags as Sf
 import imgui.TreeNodeFlags as Tnf
@@ -87,6 +92,8 @@ import imgui.WindowFlags as Wf
 object layout_ {
 
     /* Child regions */
+    var disableMouseWheel = false
+    var disableMenu = false
     var line = 50
 
 
@@ -126,14 +133,18 @@ object layout_ {
 
             treeNode("Child regions") {
 
-                text("Without border")
+                checkbox("Disable Mouse Wheel", ::disableMouseWheel)
+                checkbox("Disable Menu", ::disableMenu)
+
                 var gotoLine = button("Goto")
                 sameLine()
                 withItemWidth(100) {
                     gotoLine = gotoLine or inputInt("##Line", ::line, 0, 0, Itf.EnterReturnsTrue.i)
                 }
-                withChild("Sub1", Vec2(windowContentRegionWidth * 0.5f, 300), false, Wf.HorizontalScrollbar.i) {
-                    for (i in 0 until 100) {
+
+                val flags = if (disableMouseWheel) Wf.NoScrollWithMouse else Wf.Null
+                withChild("Child1", Vec2(windowContentRegionWidth * 0.5f, 300), false, flags or Wf.HorizontalScrollbar) {
+                    for (i in 0..99) {
                         text("%04d: scrollable region", i)
                         if (gotoLine && line == i) setScrollHere()
                     }
@@ -142,9 +153,16 @@ object layout_ {
 
                 sameLine()
 
+                // Child 2: rounded border
                 withStyleVar(StyleVar.ChildRounding, 5f) {
-                    withChild("Sub2", Vec2(0, 300), true) {
-                        text("With border")
+                    withChild("Child2", Vec2(0, 300), true, flags or if(disableMenu) Wf.Null else Wf.MenuBar) {
+                        if(!disableMenu && beginMenuBar()) {
+                            if (beginMenu("Menu")) {
+                                showExampleMenuFile()
+                                endMenu()
+                            }
+                            endMenuBar()
+                        }
                         columns(2)
                         for (i in 0..99) {
                             if (i == 50) nextColumn()
@@ -379,7 +397,7 @@ object layout_ {
                 sliderInt("Lines", ::lines, 1, 15)
                 pushStyleVar(StyleVar.FrameRounding, 3f)
                 pushStyleVar(StyleVar.FramePadding, Vec2(2f, 1f))
-                beginChild("scrolling", Vec2(0, itemsLineHeightWithSpacing * 7 + 30), true, Wf.HorizontalScrollbar.i)
+                beginChild("scrolling", Vec2(0, frameHeightWithSpacing * 7 + 30), true, Wf.HorizontalScrollbar.i)
                 for (line in 0 until lines) {
                     /*  Display random stuff (for the sake of this trivial demo we are using basic button+sameLine.
                         If you want to create your own time line for a real application you may be better off
@@ -404,9 +422,9 @@ object layout_ {
                 endChild()
                 popStyleVar(2)
                 var scrollXDelta = 0f
-                smallButton("<<"); if (isItemActive) scrollXDelta = -IO.deltaTime * 1000f; sameLine()
+                smallButton("<<"); if (isItemActive) scrollXDelta = -io.deltaTime * 1000f; sameLine()
                 text("Scroll from code"); sameLine()
-                smallButton(">>"); if (isItemActive) scrollXDelta = IO.deltaTime * 1000f; sameLine()
+                smallButton(">>"); if (isItemActive) scrollXDelta = io.deltaTime * 1000f; sameLine()
                 text("%.0f/%.0f", _scrollX, scrollMaxX)
                 if (scrollXDelta != 0f) {
                     /*  Demonstrate a trick: you can use begin() to set yourself in the context of another window (here
@@ -424,10 +442,10 @@ object layout_ {
                 val pos = Vec2(cursorScreenPos)
                 val clipRect = Vec4(pos.x, pos.y, pos.x + size.x, pos.y + size.y)
                 invisibleButton("##dummy", size)
-                if (isItemActive && isMouseDragging()) offset += IO.mouseDelta
-                windowDrawList.addRectFilled(pos, Vec2(pos.x + size.x, pos.y + size.y), Vec4.fromColor(90, 90, 120, 255).u32)
+                if (isItemActive && isMouseDragging()) offset += io.mouseDelta
+                windowDrawList.addRectFilled(pos, Vec2(pos.x + size.x, pos.y + size.y), COL32(90, 90, 120, 255))
                 windowDrawList.addText(font, fontSize * 2f, Vec2(pos.x + offset.x, pos.y + offset.y),
-                        Vec4.fromColor(255, 255, 255, 255).u32, "Line 1 hello\nLine 2 clip me!".toCharArray(), 0, 0f, clipRect)
+                        COL32(255, 255, 255, 255), "Line 1 hello\nLine 2 clip me!".toCharArray(), 0, 0f, clipRect)
             }
         }
     }

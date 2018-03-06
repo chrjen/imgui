@@ -1,12 +1,13 @@
 package imgui.imgui
 
+import gli_.hasnt
 import glm_.f
 import glm_.glm
 import glm_.i
 import glm_.vec2.Vec2
 import glm_.vec4.Vec4
 import imgui.*
-import imgui.Context.style
+import imgui.ImGui.style
 import imgui.ImGui.beginChild
 import imgui.ImGui.currentWindowRead
 import imgui.ImGui.endChild
@@ -16,10 +17,9 @@ import imgui.ImGui.popStyleColor
 import imgui.ImGui.popStyleVar
 import imgui.ImGui.pushStyleColor
 import imgui.ImGui.pushStyleVar
-import imgui.internal.Rect
-import imgui.internal.saturate
+import imgui.internal.*
 import kotlin.reflect.KMutableProperty0
-import imgui.Context as g
+import imgui.FocusedFlags as Ff
 import imgui.HoveredFlags as Hf
 import imgui.WindowFlags as Wf
 
@@ -33,24 +33,33 @@ interface imgui_utilities {
     fun isItemHovered(flags: Hf) = isItemHovered(flags.i)
 
     fun isItemHovered(flags: Int = Hf.Default.i): Boolean {
+
+        if (g.navDisableMouseHover && !g.navDisableHighlight)
+            return isItemFocused
+
         val window = g.currentWindow!!
         return when {
-            !window.dc.lastItemRectHoveredRect -> false
-        /*  [2017/10/16] Reverted commit 344d48be3 and testing RootWindow instead. I believe it is correct to NOT
-            test for rootWindow but this leaves us unable to use isItemHovered after endChild() itself.
-            Until a solution is found I believe reverting to the test from 2017/09/27 is safe since this was the test
-            that has been running for a long while. */
-        // g.hoveredWindow !== window -> false
+        // Test for bounding box overlap, as updated as ItemAdd()
+            window.dc.lastItemStatusFlags hasnt ItemStatusFlags.HoveredRect -> false
             else -> {
-                assert(flags hasnt Hf.FlattenChilds) // Flags not supported by this function
+                assert(flags hasnt (Hf.RootWindow or Hf.ChildWindows)) // Flags not supported by this function
                 when {
+                /*  Test if we are hovering the right window (our window could be behind another window)
+                    [2017/10/16] Reverted commit 344d48be3 and testing RootWindow instead. I believe it is correct to
+                    NOT test for rootWindow but this leaves us unable to use isItemHovered after endChild() itself.
+                    Until a solution is found I believe reverting to the test from 2017/09/27 is safe since this was
+                    the test that has been running for a long while. */
+                // g.hoveredWindow !== window -> false
                     g.hoveredRootWindow !== window.rootWindow && flags hasnt Hf.AllowWhenOverlapped -> false
+                // Test if another item is active (e.g. being dragged)
                     flags hasnt Hf.AllowWhenBlockedByActiveItem && g.activeId != 0 && g.activeId != window.dc.lastItemId &&
                             !g.activeIdAllowOverlap && g.activeId != window.moveId -> false
-                    !window.isContentHoverable(flags) -> false
+                // Test if interactions on this window are blocked by an active popup or modal
+                    g.navDisableMouseHover || !window.isContentHoverable(flags) -> false
+                // Test if the item is disabled
                     window.dc.itemFlags has ItemFlags.Disabled -> false
-                /*  Special handling for the 1st item after begin() which represent the title bar. When the window is
-                    collapsed (skipItems == true) that last item will never be overwritten.                 */
+                /*  Special handling for the 1st item after Begin() which represent the title bar. When the window is
+                    collapsed (SkipItems==true) that last item will never be overwritten so we need to detect tht case.                 */
                     window.dc.lastItemId == window.moveId && window.writeAccessed -> false
                     else -> true
                 }
@@ -62,6 +71,9 @@ interface imgui_utilities {
      *  return false)   */
     val isItemActive get() = if (g.activeId != 0) g.activeId == g.currentWindow!!.dc.lastItemId else false
 
+    /** is the last item focused for keyboard/gamepad navigation?   */
+    val isItemFocused get() = g.navId != 0 && !g.navDisableHighlight && g.navId == g.currentWindow!!.dc.lastItemId
+
     /** Is the last item clicked? (e.g. button/node just clicked on)   */
     fun isItemClicked(mouseButton: Int = 0) = isMouseClicked(mouseButton) && isItemHovered(Hf.Default)
 
@@ -71,6 +83,8 @@ interface imgui_utilities {
     val isAnyItemHovered get() = g.hoveredId != 0 || g.hoveredIdPreviousFrame != 0
 
     val isAnyItemActive get() = g.activeId != 0
+
+    val isAnyItemFocused get() = g.navId != 0 && !g.navDisableHighlight
 
     /** get bounding rect of last item in screen space  */
     val itemRectMin get() = currentWindowRead!!.dc.lastItemRect.min
@@ -90,28 +104,51 @@ interface imgui_utilities {
             g.activeIdAllowOverlap = true
     }
 
-    /** is current Begin()-ed window focused?   */
-    val isWindowFocused get() = g.navWindow === g.currentWindow!! // Not inside a Begin()/End()
+    /** is current window focused? or its root/child, depending on flag. see flag for options.
+     *  @param flag FocusedFlags */
+    fun isWindowFocused(flag: Ff) = isWindowFocused(flag.i)
 
-    /** is current Begin()-ed window hovered (and typically: not blocked by a popup/modal)? */
-    fun isWindowHovered(flags: Hf) = isWindowHovered(flags.i)
+    /** is current window focused? or its root/child, depending on flags. see flags for options.
+     *  @param flags FocusedFlags */
+    fun isWindowFocused(flags: Int = Ff.Null.i): Boolean {
 
+        val curr = g.currentWindow!!     // Not inside a Begin()/End()
+
+        if (flags has Ff.AnyWindow)
+            return g.navWindow != null
+
+        return when (flags and (Ff.RootWindow or Ff.ChildWindows)) {
+            Ff.RootWindow or Ff.ChildWindows -> g.navWindow?.let { it.rootWindow === curr.rootWindow } ?: false
+            Ff.RootWindow.i -> g.navWindow === curr.rootWindow
+            Ff.ChildWindows.i -> g.navWindow?.isChildOf(curr) ?: false
+            else -> g.navWindow === curr
+        }
+    }
+
+    /** iis current window hovered (and typically: not blocked by a popup/modal)? see flag for options.
+     *  @param flag HoveredFlags */
+    fun isWindowHovered(flag: Hf) = isWindowHovered(flag.i)
+
+    /** is current window hovered (and typically: not blocked by a popup/modal)? see flags for options.
+     *  @param flags HoveredFlags */
     fun isWindowHovered(flags: Int = Hf.Default.i): Boolean {
-        assert(flags hasnt Hf.AllowWhenOverlapped)  // Flags not supported by this function
+        assert(flags hasnt Hf.AllowWhenOverlapped)   // Flags not supported by this function
+        if (flags has Hf.AnyWindow) {
+            if (g.hoveredWindow == null)
+                return false
+        } else when (flags and (Hf.RootWindow or Hf.ChildWindows)) {
+            Hf.RootWindow or Hf.ChildWindows -> if (g.hoveredRootWindow !== g.currentWindow!!.rootWindow) return false
+            Hf.RootWindow.i -> if (g.hoveredWindow != g.currentWindow!!.rootWindow) return false
+            Hf.ChildWindows.i -> g.hoveredWindow.let { if (it == null || !it.isChildOf(g.currentWindow)) return false }
+            else -> if (g.hoveredWindow !== g.currentWindow) return false
+        }
+
         return when {
-            flags has Hf.FlattenChilds && g.hoveredRootWindow !== g.currentWindow!!.rootWindow -> false
-            g.hoveredWindow !== g.currentWindow -> false
             !g.hoveredRootWindow!!.isContentHoverable(flags) -> false
             flags hasnt Hf.AllowWhenBlockedByActiveItem && g.activeId != 0 && !g.activeIdAllowOverlap && g.activeId != g.hoveredWindow!!.moveId -> false
             else -> true
         }
     }
-
-    /** is current Begin()-ed root window focused (root = top-most parent of a child, otherwise self)?  */
-    val isRootWindowFocused get() = g.navWindow === g.currentWindow!!.rootWindow // Not inside a Begin()/End()
-
-    /** is current Begin()-ed root window or any of its child (including current window) focused?   */
-    val isRootWindowOrAnyChildFocused get() = g.navWindow != null && g.navWindow!!.rootWindow === g.currentWindow!!.rootWindow // Not inside a Begin()/End()
 
     /** test if rectangle (of given size, starting from cursor position) is visible / not clipped.  */
     fun isRectVisible(size: Vec2) = with(currentWindowRead!!) { clipRect overlaps Rect(dc.cursorPos, dc.cursorPos + size) }
@@ -123,14 +160,12 @@ interface imgui_utilities {
 
     val frameCount get() = g.frameCount
 
-//IMGUI_API const char*   GetStyleColorName(ImGuiCol idx);
+    /** this draw list will be the last rendered one, useful to quickly draw overlays shapes/text   */
+    val overlayDrawList get() = g.overlayDrawList
 
-    /** Utility to find the closest point the last item bounding rectangle edge. useful to visually link items  */
-    fun calcItemRectClosestPoint(pos: Vec2, onEdge: Boolean = false, outward: Float = 0f): Vec2 {
-        val rect = Rect(currentWindowRead!!.dc.lastItemRect)
-        rect.expand(outward)
-        return rect.getClosestPoint(pos, onEdge)
-    }
+    val drawListSharedData get() = g.drawListSharedData
+
+//IMGUI_API const char*   GetStyleColorName(ImGuiCol idx);
 
     /** Calculate text size. Text can be multi-line. Optionally ignore text after a ## marker.
      *  CalcTextSize("") should return ImVec2(0.0f, GImGui->FontSize)   */
@@ -174,6 +209,11 @@ interface imgui_utilities {
                 val pos = window.dc.cursorPos
                 var start = ((window.clipRect.min.y - pos.y) / itemsHeight).i
                 var end = ((window.clipRect.max.y - pos.y) / itemsHeight).i
+                // When performing a navigation request, ensure we have one item extra in the direction we are moving to
+                if (g.navMoveRequest && g.navMoveDir == Dir.Up)
+                    start--
+                if (g.navMoveRequest && g.navMoveDir == Dir.Down)
+                    end++
                 start = glm.clamp(start, 0, itemsCount)
                 end = glm.clamp(end + 1, start, itemsCount)
                 start..end
@@ -192,6 +232,7 @@ interface imgui_utilities {
         return beginChild(id, size, true, Wf.NoMove or Wf.AlwaysUseWindowPadding or extraFlags)
     }
 
+    /** Always call EndChildFrame() regardless of BeginChildFrame() return values (which indicates a collapsed/clipped window)  */
     fun endChildFrame() {
         endChild()
         popStyleVar(3)

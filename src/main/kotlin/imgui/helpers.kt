@@ -3,8 +3,9 @@ package imgui
 import glm_.bool
 import glm_.glm
 import glm_.i
+import glm_.vec2.Vec2
 import glm_.vec4.Vec4
-import imgui.Context.style
+import imgui.ImGui.style
 import imgui.ImGui.calcListClipping
 import imgui.ImGui.colorConvertHSVtoRGB
 import imgui.ImGui.currentWindow
@@ -126,10 +127,52 @@ class TextEditCallbackData {
     }
 }
 
-class SizeConstraintCallbackData {
-    init {
-        TODO()
+class SizeCallbackData(
+        /** Read-only.   What user passed to SetNextWindowSizeConstraints() */
+        var userData: Any? = null,
+        /** Read-only.   Window position, for reference.    */
+        val pos: Vec2 = Vec2(),
+        /** Read-only.   Current window size.   */
+        val currentSize: Vec2 = Vec2(),
+        /** Read-write.  Desired size, based on user's mouse position. Write to this field to restrain resizing.    */
+        val desiredSize: Vec2 = Vec2())
+
+/** Data payload for Drag and Drop operations */
+class Payload {
+    // Members
+
+    /** Data (copied and owned by dear imgui) */
+    var data: Any? = null
+    /** Data size */
+    var dataSize = 0
+
+    // [Internal]
+
+    /** Source item id */
+    var sourceId = 0
+    /** Source parent id (if available) */
+    var sourceParentId = 0
+    /** Data timestamp */
+    var dataFrameCount = -1
+    /** Data type tag (short user-supplied string, 12 characters max) */
+    var dataType = ""
+    /** Set when AcceptDragDropPayload() was called and mouse has been hovering the target item (nb: handle overlapping drag targets) */
+    var preview = false
+    /** Set when AcceptDragDropPayload() was called and mouse button is released over the target item. */
+    var delivery = false
+
+    fun clear() {
+        sourceParentId = 0
+        sourceId = 0
+        data = null
+        dataSize = 0
+        dataType = ""
+        dataFrameCount = -1
+        delivery = false
+        preview = false
     }
+
+    fun isDataType(type: String) = dataFrameCount != -1 && type == dataType
 }
 
 class Color {
@@ -192,12 +235,12 @@ class Color {
  *  - Step 3: the clipper validate that we have reached the expected Y position (corresponding to element DisplayEnd),
  *      advance the cursor to the end of the list and then returns 'false' to end the loop. */
 class ListClipper
-/** @param[itemsCount]:  Use -1 to ignore (you can call Begin later). Use INT_MAX if you don't know how many items
- *  you have (in which case the cursor won't be advanced in the final step).
- *  @param[itemsHeight]: Use -1.0f to be calculated automatically on first step. Otherwise pass in the distance
- *  between your items, typically GetTextLineHeightWithSpacing() or GetItemsLineHeightWithSpacing().
- *  If you don't specify an items_height, you NEED to call Step(). If you specify items_height you may call the old
- *  Begin()/End() api directly, but prefer calling Step().   */
+/** @param itemsCount:  Use -1 to ignore (you can call begin() later). Use Int.MAX_VALUE if you don't know how many
+ *  items you have (in which case the cursor won't be advanced in the final step).
+ *  @param itemsHeight: Use -1f to be calculated automatically on first step. Otherwise pass in the distance
+ *  between your items, typically textLineHeightWithSpacing or frameHeightWithSpacing.
+ *  If you don't specify an items_height, you NEED to call step(). If you specify itemsHeight you may call the old
+ *  begin()/end() api directly, but prefer calling step().   */
 constructor(itemsCount: Int = -1, itemsHeight: Float = -1f) {
 
     init {
@@ -300,14 +343,14 @@ constructor(itemsCount: Int = -1, itemsHeight: Float = -1f) {
                 FIXME: It is problematic that we have to do that here, because custom/equivalent end-user code would stumble
                 on the same issue. Consider moving within SetCursorXXX functions?   */
             cursorPosY = posY
-            with(currentWindow.dc) {
+            val window = currentWindow
+            with(window.dc) {
                 // Setting those fields so that SetScrollHere() can properly function after the end of our clipper usage.
                 cursorPosPrevLine.y = cursorPos.y - lineHeight
                 /*  If we end up needing more accurate data (to e.g. use SameLine) we may as well make the clipper have a
                     fourth step to let user process and display the last item in their list.             */
                 prevLineHeight = lineHeight - style.itemSpacing.y
-                if (columnsCount > 1)
-                    columnsCellMinY = cursorPos.y   // Setting this so that cell Y position are set properly
+                columnsSet?.cellMinY = window.dc.cursorPos.y // Setting this so that cell Y position are set properly
             }
         }
     }

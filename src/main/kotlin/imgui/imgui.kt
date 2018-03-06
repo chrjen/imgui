@@ -2,9 +2,25 @@ package imgui
 
 import glm_.b
 import glm_.i
-import glm_.vec2.Vec2
-import glm_.vec2.Vec2i
 import imgui.imgui.*
+
+/** -----------------------------------------------------------------------------
+ *      Context
+ *  -----------------------------------------------------------------------------
+ *
+ *  Current context pointer. Implicitely used by all ImGui functions. Always assumed to be != null.
+ *  ::createContext() will automatically set this pointer if it is null. Change to a different context by calling
+ *  ::setCurrentContext().
+ *  If you use DLL hotreloading you might need to call ::setCurrentContext() after reloading code from this file.
+ *  ImGui functions are not thread-safe because of this pointer. If you want thread-safety to allow N threads to access
+ *  N different contexts, you can:
+ *      - Change this variable to use thread local storage. You may #define GImGui in imconfig.h for that purpose.
+ *          Future development aim to make this context pointer explicit to all calls.
+ *          Also read https://github.com/ocornut/imgui/issues/586
+ *      - Having multiple instances of the ImGui code compiled inside different namespace (easiest/safest, if you have
+ *          a finite number of contexts)    */
+val g get() = gImGui!!
+var gImGui: Context? = null
 
 // Helpers macros to generate 32-bits encoded colors
 var USE_BGRA_PACKED_COLOR = false
@@ -22,12 +38,13 @@ val COL32_BLACK_TRANS = COL32(0, 0, 0, 0)   // Transparent black = 0x00000000
 
 val MOUSE_INVALID = -256000f
 
-var IMGUI_HAS_NAV = false
+val IMGUI_DEBUG_NAV_SCORING = false
+val IMGUI_DEBUG_NAV_RECTS = false
 
 object ImGui :
 
         imgui_main,
-        imgui_demoDebugInfo,
+        imgui_demoDebugInformations,
         imgui_window,
         imgui_parametersStacks,
         imgui_cursorLayout,
@@ -35,6 +52,7 @@ object ImGui :
         imgui_idScopes,
         imgui_widgetsText,
         imgui_widgetsMain,
+        imgui_widgetsComboBox,
         imgui_widgetsDrag,
         imgui_widgetsInputKeyboard,
         imgui_widgetsSliders,
@@ -45,23 +63,25 @@ object ImGui :
         imgui_menus,
         imgui_popups,
         imgui_logging,
+        imgui_dragAndDrop,
         imgui_clipping,
         imgui_styles,
+        imgui_focusActivation,
         imgui_utilities,
         imgui_inputs,
         imgui_helpers,
 
         imgui_internal {
 
-    val version = "1.53 WIP"
+    val version = "1.60 WIP"
 }
 
 var ptrIndices = 0
-val ptrId = Array(512, { java.lang.Byte(it.b) })
+var ptrId = Array(512, { java.lang.Byte(it.b) })
 
 // TODO get rid of local top value KMutableProperty in favor of the better with*{} solution
 
-typealias SizeConstraintCallback = (userData: Any?, pos: Vec2i, currenSize: Vec2, desiredSize: Vec2) -> Unit
+typealias SizeCallback = (SizeCallbackData) -> Unit
 
 // dummy main
 fun main(args: Array<String>) {
@@ -71,3 +91,7 @@ fun main(args: Array<String>) {
 val NUL = '\u0000'
 
 var DEBUG = true
+
+operator fun StringBuilder.plusAssign(string: String) {
+    append(string)
+}

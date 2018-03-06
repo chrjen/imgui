@@ -7,7 +7,8 @@ import glm_.vec2.Vec2
 import glm_.vec2.operators.div
 import glm_.vec4.Vec4
 import imgui.*
-import imgui.Context.style
+import imgui.ImGui.acceptDragDropPayload
+import imgui.ImGui.beginDragDropTarget
 import imgui.ImGui.bullet
 import imgui.ImGui.bulletText
 import imgui.ImGui.button
@@ -31,6 +32,7 @@ import imgui.ImGui.dragInt2
 import imgui.ImGui.dragInt3
 import imgui.ImGui.dragInt4
 import imgui.ImGui.dragIntRange2
+import imgui.ImGui.endDragDropTarget
 import imgui.ImGui.fontSize
 import imgui.ImGui.image
 import imgui.ImGui.imageButton
@@ -44,6 +46,7 @@ import imgui.ImGui.inputInt2
 import imgui.ImGui.inputInt3
 import imgui.ImGui.inputInt4
 import imgui.ImGui.inputText
+import imgui.ImGui.io
 import imgui.ImGui.isItemActive
 import imgui.ImGui.isItemClicked
 import imgui.ImGui.isItemHovered
@@ -76,6 +79,7 @@ import imgui.ImGui.sliderInt3
 import imgui.ImGui.sliderInt4
 import imgui.ImGui.smallButton
 import imgui.ImGui.spacing
+import imgui.ImGui.style
 import imgui.ImGui.text
 import imgui.ImGui.textColored
 import imgui.ImGui.textDisabled
@@ -101,12 +105,11 @@ import imgui.functionalProgramming.withStyleColor
 import imgui.functionalProgramming.withStyleVar
 import imgui.functionalProgramming.withTextWrapPos
 import imgui.functionalProgramming.withTooltip
-import imgui.imgui.imgui_demoDebugInfo.Companion.showHelpMarker
+import imgui.imgui.imgui_demoDebugInformations.Companion.showHelpMarker
 import imgui.or
 import kotlin.math.cos
 import kotlin.reflect.KMutableProperty0
 import imgui.ColorEditFlags as Cef
-import imgui.Context as g
 import imgui.InputTextFlags as Itf
 import imgui.SelectableFlags as Sf
 import imgui.TreeNodeFlags as Tnf
@@ -119,8 +122,8 @@ object widgets {
     var check = true
     var e = 0
     val arr = floatArrayOf(0.6f, 0.1f, 1f, 0.5f, 0.92f, 0.1f, 0.2f)
-    var item = 1
-    var item2 = -1
+    var currentItem1 = 1
+    var currentItem2 = ""
     var str0 = "Hello, world!".toCharArray()
     var i0 = 123
     var f0 = 0.001f
@@ -159,7 +162,9 @@ object widgets {
 
 
     /* Selectables */
-    val selected0 = booleanArrayOf(false, true, false, false)
+    val selection0 = booleanArrayOf(false, true, false, false, false)
+    val selection1 = BooleanArray(5)
+    var selected0 = -1
     val selected1 = BooleanArray(3)
     val selected2 = BooleanArray(16)
     val selected3 = booleanArrayOf(true, false, false, false, false, true, false, false, false, false, true, false, false, false, false, true)
@@ -184,10 +189,11 @@ object widgets {
 
     /* Color/Picker Widgets */
     val color = Vec4.fromColor(114, 144, 154, 200)
-    var hdr = false
     var alphaPreview = true
     var alphaHalfPreview = false
     var optionsMenu = true
+    var hdr = false
+    // Generate a dummy palette
     var savedPaletteInited = false
     var savedPalette = Array(32, { Vec4() })
     var backupColor = Vec4()
@@ -276,11 +282,27 @@ object widgets {
                     }
                 separator()
                 labelText("label", "Value")
-                // Combo using values packed in a single constant string (for really quick combo)
-                combo("combo", ::item, "aaaa\u0000bbbb\u0000cccc\u0000dddd\u0000eeee\u0000\u0000")
-                val items = arrayOf("AAAA", "BBBB", "CCCC", "DDDD", "EEEE", "FFFF", "GGGG", "HHHH", "IIII", "JJJJ", "KKKK")
-                // Combo using proper array. You can also pass a callback to retrieve array value, no need to create/copy an array just for that.
-                combo("combo scroll", ::item2, items)
+
+                run {
+                    // Simplified one-liner Combo() API, using values packed in a single constant string
+                    combo("combo", ::currentItem1, "aaaa\u0000bbbb\u0000cccc\u0000dddd\u0000eeee\u0000\u0000")
+                    //ImGui::Combo("combo w/ array of char*", &current_item_2_idx, items, IM_ARRAYSIZE(items));   // Combo using proper array. You can also pass a callback to retrieve array value, no need to create/copy an array just for that.
+
+                    // General BeginCombo() API, you have full control over your selection data and display type
+                    val items = arrayOf("AAAA", "BBBB", "CCCC", "DDDD", "EEEE", "FFFF", "GGGG", "HHHH", "IIII", "JJJJ", "KKKK", "LLLLLLL", "MMMM", "OOOOOOO", "PPPP", "QQQQQQQQQQ", "RRR", "SSSS")
+                    // Combo using proper array. You can also pass a callback to retrieve array value, no need to create/copy an array just for that.
+
+//                  jvm TODO  if (beginCombo("combo 2", ::currentItem2)) { // The second parameter is the label previewed before opening the combo.
+//                        for (n in items) {
+//                            val isSelected = currentItem2 == n // You can store your selection however you want, outside or inside your objects
+//                            if (selectable(n, isSelected))
+//                                currentItem2 = n
+//                            if (isSelected)
+//                                setItemDefaultFocus()   // Set the initial focus when opening the combo (scrolling + for keyboard navigation support in the upcoming navigation branch)
+//                        }
+//                        endCombo()
+//                    }
+                }
 
                 run {
                     inputText("input text", str0, str0.size)
@@ -365,7 +387,7 @@ object widgets {
                         if (nodeClicked != -1) {
                             /*  Update selection state. Process outside of tree loop to avoid visual inconsistencies during
                                 the clicking-frame.                         */
-                            if (IO.keyCtrl)
+                            if (io.keyCtrl)
                                 selectionMask = selectionMask xor (1 shl nodeClicked)   // CTRL+click to toggle
                             /*  Depending on selection behavior you want, this commented bit preserve selection when
                                 clicking on item that is part of the selection                         */
@@ -443,7 +465,7 @@ object widgets {
                         Instead we are encoding a few string with hexadecimal constants. Don't do this in your application!
                         Note that characters values are preserved even by inputText() if the font cannot be displayed,
                         so you can safely copy & paste garbled characters into another application. */
-                    textWrapped("CJK text will only appears if the font was loaded with the appropriate CJK character ranges. Call IO.font.loadFromFileTTF() manually to load extra character ranges.")
+                    textWrapped("CJK text will only appears if the font was loaded with the appropriate CJK character ranges. Call io.font.loadFromFileTTF() manually to load extra character ranges.")
                     text("Hiragana: \u304b\u304d\u304f\u3051\u3053 (kakikukeko)")
                     text("Kanjis: \u65e5\u672c\u8a9e (nihongo)")
                     inputText("UTF-16 input", buf)
@@ -464,8 +486,8 @@ object widgets {
                     Using showMetricsWindow() as a "debugger" to inspect the draw data that are being passed to your
                     render will help you debug issues if you are confused about this.
                     Consider using the lower-level drawList.addImage() API, via imgui.windowDrawList.addImage().    */
-                val myTexId = IO.fonts.texId
-                val myTexSize = Vec2(IO.fonts.texSize)
+                val myTexId = io.fonts.texId
+                val myTexSize = Vec2(io.fonts.texSize)
 
                 text("%.0fx%.0f", myTexSize.x, myTexSize.y)
                 val pos = Vec2(cursorScreenPos)
@@ -493,15 +515,36 @@ object widgets {
             }
 
             treeNode("Selectables") {
+                /*  Selectable() has 2 overloads:
+                    - The one taking "bool selected" as a read-only selection information. When Selectable() has been
+                        clicked is returns true and you can alter selection state accordingly.
+                    - The one taking "bool* p_selected" as a read-write selection information (convenient in some cases)
+                    The earlier is more flexible, as in real application your selection may be stored in
+                    a different manner (in flags within objects, as an external list, etc). */
                 treeNode("Basic") {
-                    selectable("1. I am selectable", selected0, 0)
-                    selectable("2. I am selectable", selected0, 1)
+                    selectable("1. I am selectable", selection0, 0)
+                    selectable("2. I am selectable", selection0, 1)
                     text("3. I am not selectable")
-                    selectable("4. I am selectable", selected0, 2)
-                    if (selectable("5. I am double clickable", selected0[3], Sf.AllowDoubleClick.i))
-                        if (isMouseDoubleClicked(0)) selected0[3] = !selected0[3]
+                    selectable("4. I am selectable", selection0, 2)
+                    if (selectable("5. I am double clickable", selection0[3], Sf.AllowDoubleClick.i))
+                        if (isMouseDoubleClicked(0)) selection0[3] = !selection0[3]
                 }
-                treeNode("Rendering more text into the same block") {
+                treeNode("Selection State: Single Selection") {
+                    for (n in 0..4)
+                        if (selectable("Object $n", selected0 == n))
+                            selected0 = n
+                }
+                treeNode("Selection State: Multiple Selection") {
+                    showHelpMarker("Hold CTRL and click to select multiple items.")
+                    for (n in 0..4)
+                        if (selectable("Object $n", selection1[n])) {
+                            if (!io.keyCtrl)    // Clear selection when CTRL is not held
+                                selection1.fill(false)
+                            selection0[n] = selection0[n] xor true
+                        }
+                }
+                treeNode("Rendering more text into the same line") {
+                    // Using the Selectable() override that takes "bool* p_selected" parameter and toggle your booleans automatically.
                     selectable("main.c", selected1, 0); sameLine(300); text(" 2,345 bytes")
                     selectable("Hello.cpp", selected1, 1); sameLine(300); text("12,345 bytes")
                     selectable("Hello.h", selected1, 2); sameLine(300); text(" 2,345 bytes")
@@ -588,7 +631,7 @@ object widgets {
 
                 // Animate a simple progress bar
                 if (animate) {
-                    progress += progressDir * 0.4f * IO.deltaTime
+                    progress += progressDir * 0.4f * io.deltaTime
                     if (progress >= 1.1f) {
                         progress = +1.1f
                         progressDir *= -1f
@@ -610,10 +653,10 @@ object widgets {
 
             treeNode("Color/Picker Widgets") {
 
-                checkbox("With HDR", ::hdr); sameLine(); showHelpMarker("Currently all this does is to lift the 0..1 limits on dragging widgets.")
                 checkbox("With Alpha Preview", ::alphaPreview)
                 checkbox("With Half Alpha Preview", ::alphaHalfPreview)
                 checkbox("With Options Menu", ::optionsMenu); sameLine(); showHelpMarker("Right-click on the individual color widget to show options.")
+                checkbox("With HDR", ::hdr); sameLine(); showHelpMarker("Currently all this does is to lift the 0..1 limits on dragging widgets.")
                 var miscFlags = if (hdr) Cef.HDR.i else 0
                 if (alphaHalfPreview) miscFlags = miscFlags or Cef.AlphaPreviewHalf
                 if (alphaPreview) miscFlags = miscFlags or Cef.AlphaPreview
@@ -635,7 +678,11 @@ object widgets {
 
                 text("Color button with Custom Picker Popup:")
                 if (!savedPaletteInited)
-                    savedPalette.forEachIndexed { n, c -> colorConvertHSVtoRGB(n / 31f, 0.8f, 0.8f, c::x, c::y, c::z) }
+                    savedPalette.forEachIndexed { n, c ->
+                        colorConvertHSVtoRGB(n / 31f, 0.8f, 0.8f, c::x, c::y, c::z)
+                        savedPalette[n].w = 1f // Alpha
+                    }
+                savedPaletteInited = true
                 var openPopup = colorButton("MyColor##3b", color, miscFlags)
                 sameLine()
                 openPopup = openPopup or button("Palette")
@@ -661,8 +708,18 @@ object widgets {
                             withId(n) {
                                 if ((n % 8) != 0)
                                     sameLine(0f, style.itemSpacing.y)
-                                if (colorButton("##palette", c, Cef.NoPicker or Cef.NoTooltip, Vec2(20, 20)))
+                                if (colorButton("##palette", c, Cef.NoAlpha or Cef.NoPicker or Cef.NoTooltip, Vec2(20, 20)))
                                     color.put(c.x, c.y, c.z, color.w) // Preserve alpha!
+
+                                if (beginDragDropTarget()) {
+                                    acceptDragDropPayload(PAYLOAD_TYPE_COLOR_3F)?.let {
+                                        for (i in 0..2) savedPalette[n][i] = (it.data as Vec4)[i]
+                                    }
+                                    acceptDragDropPayload(PAYLOAD_TYPE_COLOR_4F)?.let {
+                                        for (i in 0..3) savedPalette[n][i] = (it.data as Vec4)[i]
+                                    }
+                                    endDragDropTarget()
+                                }
                             }
                         }
                     }

@@ -21,9 +21,8 @@ import gln.vertexArray.glBindVertexArray
 import gln.vertexArray.glVertexAttribPointer
 import gln.vertexArray.withVertexArray
 import imgui.*
-import imgui.Context as g
+import imgui.ImGui.io
 import org.lwjgl.glfw.GLFW.*
-import org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.opengl.GL13.*
 import org.lwjgl.opengl.GL14.*
@@ -32,13 +31,6 @@ import org.lwjgl.opengl.GL20.*
 import org.lwjgl.opengl.GL30.*
 import org.lwjgl.opengl.GL33.GL_SAMPLER_BINDING
 import org.lwjgl.opengl.GL33.glBindSampler
-import org.lwjgl.system.Callback
-import org.lwjgl.system.MemoryUtil.NULL
-import org.lwjgl.system.MemoryUtil.memAddress
-import org.lwjgl.system.Platform
-import org.lwjgl.system.windows.RECT
-import org.lwjgl.system.windows.User32.*
-import org.lwjgl.system.windows.WindowProc
 import uno.buffer.bufferBig
 import uno.buffer.destroy
 import uno.buffer.intBufferBig
@@ -52,7 +44,6 @@ object LwjglGL3 {
     lateinit var window: GlfwWindow
     var time = 0f
     val mouseJustPressed = BooleanArray(3)
-    var mouseWheel = 0f
 
     object Buffer {
         val Vertex = 0
@@ -71,7 +62,7 @@ object LwjglGL3 {
 
         this.window = window
 
-        with(IO) {
+        with(io) {
             // Keyboard mapping. ImGui will use those indices to peek into the io.KeyDown[] array.
             keyMap[Key.Tab] = GLFW_KEY_TAB
             keyMap[Key.LeftArrow] = GLFW_KEY_LEFT
@@ -82,8 +73,10 @@ object LwjglGL3 {
             keyMap[Key.PageDown] = GLFW_KEY_PAGE_DOWN
             keyMap[Key.Home] = GLFW_KEY_HOME
             keyMap[Key.End] = GLFW_KEY_END
+            keyMap[Key.Insert] = GLFW_KEY_INSERT
             keyMap[Key.Delete] = GLFW_KEY_DELETE
             keyMap[Key.Backspace] = GLFW_KEY_BACKSPACE
+            keyMap[Key.Space] = GLFW_KEY_SPACE
             keyMap[Key.Enter] = GLFW_KEY_ENTER
             keyMap[Key.Escape] = GLFW_KEY_ESCAPE
             keyMap[Key.A] = GLFW_KEY_A
@@ -92,10 +85,6 @@ object LwjglGL3 {
             keyMap[Key.X] = GLFW_KEY_X
             keyMap[Key.Y] = GLFW_KEY_Y
             keyMap[Key.Z] = GLFW_KEY_Z
-
-            /* Alternatively you can set this to NULL and call ImGui::GetDrawData() after ImGui::Render() to get the
-               same ImDrawData pointer.             */
-            renderDrawListsFn = this@LwjglGL3::renderDrawLists
         }
 
         if (installCallbacks) {
@@ -119,43 +108,39 @@ object LwjglGL3 {
         if (fontTexture[0] < 0) createDeviceObjects()
 
         // Setup display size (every frame to accommodate for window resizing)
-        IO.displaySize put window.size
-        IO.displayFramebufferScale.x = if (window.size.x > 0) window.framebufferSize.x / window.size.x.f else 0f
-        IO.displayFramebufferScale.y = if (window.size.y > 0) window.framebufferSize.y / window.size.y.f else 0f
+        io.displaySize put window.size
+        io.displayFramebufferScale.x = if (window.size.x > 0) window.framebufferSize.x / window.size.x.f else 0f
+        io.displayFramebufferScale.y = if (window.size.y > 0) window.framebufferSize.y / window.size.y.f else 0f
 
         // Setup time step
         val currentTime = glfw.time
-        IO.deltaTime = if (time > 0) (currentTime - time).f else 1f / 60f
+        io.deltaTime = if (time > 0) (currentTime - time).f else 1f / 60f
         time = currentTime
 
         /*  Setup inputs
             (we already got mouse wheel, keyboard keys & characters from glfw callbacks polled in glfwPollEvents())
             Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)   */
         if (window.focused)
-            if (IO.wantMoveMouse)
+            if (io.wantMoveMouse)
             /*  Set mouse position if requested by io.WantMoveMouse flag (used when io.NavMovesTrue is enabled by user
                 and using directional navigation)   */
-                window.cursorPos = Vec2d(IO.mousePos)
+                window.cursorPos = Vec2d(io.mousePos)
             else
-            // Get mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)
-                IO.mousePos put window.cursorPos
+                io.mousePos put window.cursorPos
         else
-            IO.mousePos put -Float.MAX_VALUE
+            io.mousePos put -Float.MAX_VALUE
 
         repeat(3) {
             /*  If a mouse press event came, always pass it as "mouse held this frame", so we don't miss click-release
                 events that are shorter than 1 frame.   */
-            IO.mouseDown[it] = mouseJustPressed[it] || window.mouseButton(it) != 0
+            io.mouseDown[it] = mouseJustPressed[it] || window.mouseButton(it) != 0
             mouseJustPressed[it] = false
         }
 
-        IO.mouseWheel = mouseWheel
-        mouseWheel = 0f
-
         // Hide OS mouse cursor if ImGui is drawing it
-        window.cursor = if (IO.mouseDrawCursor) GlfwWindow.Cursor.Hidden else GlfwWindow.Cursor.Normal
+        window.cursor = if (io.mouseDrawCursor) GlfwWindow.Cursor.Hidden else GlfwWindow.Cursor.Normal
 
-        /*  Start the frame. This call will update the IO.wantCaptureMouse, IO.wantCaptureKeyboard flag that you can use
+        /*  Start the frame. This call will update the io.wantCaptureMouse, io.wantCaptureKeyboard flag that you can use
             to dispatch inputs (or not) to your application.         */
         ImGui.newFrame()
     }
@@ -239,7 +224,7 @@ object LwjglGL3 {
 
             checkError("checkSize")
 
-            if(DEBUG) println("new buffers sizes, vtx: $vtxSize, idx: $idxSize")
+            if (DEBUG) println("new buffers sizes, vtx: $vtxSize, idx: $idxSize")
         }
     }
 
@@ -257,7 +242,7 @@ object LwjglGL3 {
         /*  Load as RGBA 32-bits (75% of the memory is wasted, but default font is so small) because it is more likely
             to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than
             just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.  */
-        val (pixels, size) = IO.fonts.getTexDataAsRGBA32()
+        val (pixels, size) = io.fonts.getTexDataAsRGBA32()
 
         // Upload texture to graphics system
         val lastTexture = glGetInteger(GL_TEXTURE_BINDING_2D)
@@ -265,11 +250,12 @@ object LwjglGL3 {
         initTexture2d(fontTexture) {
             minFilter = linear
             magFilter = linear
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0)
             image(GL_RGBA, size, GL_RGBA, GL_UNSIGNED_BYTE, pixels)
         }
 
         // Store our identifier
-        IO.fonts.texId = fontTexture[0]
+        io.fonts.texId = fontTexture[0]
 
         // Restore state
         glBindTexture(GL_TEXTURE_2D, lastTexture)
@@ -277,19 +263,18 @@ object LwjglGL3 {
         return checkError("createFontsTexture")
     }
 
-    /** This is the main rendering function that you have to implement and provide to ImGui (via setting up
-     *  'RenderDrawListsFn' in the ImGuiIO structure)
+    /** OpenGL3 Render function.
+     *  (this used to be set in io.renderDrawListsFn and called by ImGui::render(), but you can now call this directly
+     *  from your main loop)
      *  Note that this implementation is little overcomplicated because we are saving/setting up/restoring every OpenGL
-     *  state explicitly, in order to be able to run within any OpenGL engine that doesn't do so.
-     *  If text or lines are blurry when integrating ImGui in your engine: in your Render function, try translating your
-     *  projection matrix by (0.5f,0.5f) or (0.375f,0.375f) */
-    fun renderDrawLists(drawData: DrawData) {
-        checkError("init")
+     *  state explicitly, in order to be able to run within any OpenGL engine that doesn't do so.   */
+    fun renderDrawData(drawData: DrawData) {
+
         /** Avoid rendering when minimized, scale coordinates for retina displays
          *  (screen coordinates != framebuffer coordinates) */
-        val fbSize = IO.displaySize * IO.displayFramebufferScale
+        val fbSize = io.displaySize * io.displayFramebufferScale
         if (fbSize equal 0) return
-        drawData.scaleClipRects(IO.displayFramebufferScale)
+        drawData.scaleClipRects(io.displayFramebufferScale)
 
         // Backup GL state
         val lastActiveTexture = glGetInteger(GL_ACTIVE_TEXTURE)
@@ -324,7 +309,7 @@ object LwjglGL3 {
 
         // Setup viewport, orthographic projection matrix
         glViewport(fbSize)
-        val ortho = glm.ortho(mat, 0f, IO.displaySize.x.f, IO.displaySize.y.f, 0f)
+        val ortho = glm.ortho(mat, 0f, io.displaySize.x.f, io.displaySize.y.f, 0f)
         glUseProgram(program)
         glUniform(program.mat, ortho)
 
@@ -383,15 +368,18 @@ object LwjglGL3 {
         glScissor(lastScissorBox)
     }
 
-    private val mouseButtonCallback = { button: Int, action: Int, _: Int ->
+    val mouseButtonCallback = { button: Int, action: Int, _: Int ->
         if (action == GLFW_PRESS && button in 0..2)
             mouseJustPressed[button] = true
     }
 
-    private val scrollCallback = { offset: Vec2d -> mouseWheel += offset.y.f } // Use fractional mouse wheel.
+    val scrollCallback = { offset: Vec2d ->
+        io.mouseWheelH += offset.x.f
+        io.mouseWheel += offset.y.f
+    }
 
-    private val keyCallback = { key: Int, _: Int, action: Int, _: Int ->
-        with(IO) {
+    val keyCallback = { key: Int, _: Int, action: Int, _: Int ->
+        with(io) {
             if (key in keysDown.indices)
                 if (action == GLFW_PRESS)
                     keysDown[key] = true
@@ -406,11 +394,10 @@ object LwjglGL3 {
         }
     }
 
-    private val charCallback = { c: Int -> if (c in 1..65535) IO.addInputCharacter(c.c) }
+    val charCallback = { c: Int -> if (c in 1..65535) io.addInputCharacter(c.c) }
 
     fun shutdown() {
         invalidateDeviceObjects()
-        ImGui.shutdown()
     }
 
     private fun invalidateDeviceObjects() {
@@ -422,7 +409,7 @@ object LwjglGL3 {
 
         if (fontTexture[0] >= 0) {
             glDeleteTextures(fontTexture)
-            IO.fonts.texId = -1
+            io.fonts.texId = -1
             fontTexture[0] = -1
         }
     }

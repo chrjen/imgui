@@ -1,13 +1,14 @@
 package imgui
 
-//import imgui.TrueType.packFontRangesGatherRects
-//import imgui.TrueType.packFontRangesRenderIntoRects
-//import imgui.TrueType.packSetOversampling
+
 import glm_.*
 import glm_.vec2.Vec2
 import glm_.vec2.Vec2i
+import glm_.vec2.operators.div
+import glm_.vec2.operators.times
 import glm_.vec4.Vec4
-import imgui.Context.style
+import imgui.ImGui.io
+import imgui.ImGui.style
 import imgui.internal.fileLoadToCharArray
 import imgui.internal.isSpace
 import imgui.internal.upperPowerOfTwo
@@ -18,10 +19,11 @@ import org.lwjgl.stb.STBTruetype.*
 import org.lwjgl.system.MemoryUtil
 import uno.buffer.bufferBig
 import uno.buffer.destroy
+import uno.buffer.isNotEmpty
 import uno.convert.decode85
 import uno.stb.stb
+import unsigned.toULong
 import java.nio.ByteBuffer
-import imgui.Context as g
 
 
 class FontConfig {
@@ -36,7 +38,7 @@ class FontConfig {
     /** Index of font within TTF/OTF file   */
     var fontNo = 0
     /** Size in pixels for rasterizer.  */
-    var sizePixels = 0.0f
+    var sizePixels = 0f
     /** Rasterize at higher quality for sub-pixel positioning. We don't use sub-pixel positions on the Y axis.  */
     var oversample = Vec2i(3, 1)
     /** Align every glyph to pixel boundary. Useful e.g. if you are merging a non-pixel aligned font with the default
@@ -115,10 +117,10 @@ class FontAtlas {
 
         // Create new font
         if (!fontCfg.mergeMode)
-            fonts.add(Font())
+            fonts += Font()
         else
             assert(fonts.isNotEmpty())  /*  When using MergeMode make sure that a font has already been added before.
-                                You can use ImGui::GetIO().Fonts->AddFontDefault() to add the default imgui font.  */
+                                You can use io.fonts.addFontDefault to add the default imgui font.  */
         configData.add(fontCfg)
         if (fontCfg.dstFont == null)
             fontCfg.dstFont = fonts.last()
@@ -142,7 +144,7 @@ class FontAtlas {
     fun addFontDefault(fontCfg: FontConfig): Font {
 
         if (fontCfg.name.isEmpty()) fontCfg.name = "ProggyClean.ttf, 13px"
-        if (fontCfg.sizePixels <= 0f) fontCfg.sizePixels = 13.0f
+        if (fontCfg.sizePixels <= 0f) fontCfg.sizePixels = 13f
 
         val ttfCompressedBase85 = proggyCleanTtfCompressedDataBase85
         return addFontFromMemoryCompressedBase85TTF(ttfCompressedBase85, fontCfg.sizePixels, fontCfg, glyphRangesDefault)
@@ -258,14 +260,15 @@ class FontAtlas {
             Although it is likely to be the most commonly used format, our font rendering is 1 channel / 8 bpp         */
         if (texPixelsRGBA32 == null) {
             val (pixels, _, _) = getTexDataAsAlpha8()
-            val a = ByteArray(32768, { pixels[it] })
-            texPixelsRGBA32 = bufferBig(texSize.x * texSize.y * 4)
-            val dst = texPixelsRGBA32!!
-            for (n in 0 until pixels.size) {
-                dst[n * 4] = 255.b
-                dst[n * 4 + 1] = 255.b
-                dst[n * 4 + 2] = 255.b
-                dst[n * 4 + 3] = pixels[n]
+            if (pixels.isNotEmpty()) {
+                texPixelsRGBA32 = bufferBig(texSize.x * texSize.y * 4)
+                val dst = texPixelsRGBA32!!
+                for (n in 0 until pixels.size) {
+                    dst[n * 4] = 255.b
+                    dst[n * 4 + 1] = 255.b
+                    dst[n * 4 + 2] = 255.b
+                    dst[n * 4 + 3] = pixels[n]
+                }
             }
         }
 
@@ -384,53 +387,53 @@ class FontAtlas {
                 0x0E00, 0x0E7F) // Thai
 
     // Helpers to build glyph ranges from text data. Feed your application strings/characters to it then call BuildRanges().
-//    +    struct GlyphRangesBuilder
-//    +    {
-//        +        ImVector<unsigned char> UsedChars;  // Store 1-bit per Unicode code point (0=unused, 1=used)
-//        +        GlyphRangesBuilder()                { UsedChars.resize(0x10000 / 8); memset(UsedChars.Data, 0, 0x10000 / 8); }
-//        +        bool           GetBit(int n)        { return (UsedChars[n >> 3] & (1 << (n & 7))) != 0; }
-//        +        void           SetBit(int n)        { UsedChars[n >> 3] |= 1 << (n & 7); }  // Set bit 'c' in the array
-//        +        void           AddChar(ImWchar c)   { SetBit(c); }                          // Add character
-//        +        IMGUI_API void AddText(const char* text, const char* text_end = NULL);      // Add string (each character of the UTF-8 string are added)
-//        +        IMGUI_API void AddRanges(const ImWchar* ranges);                            // Add ranges, e.g. builder.AddRanges(ImFontAtlas::GetGlyphRangesDefault) to force add all of ASCII/Latin+Ext
-//        +        IMGUI_API void BuildRanges(ImVector<ImWchar>* out_ranges);                  // Output new ranges
-//        +    };
+//    struct GlyphRangesBuilder
+//    {
+//            ImVector<unsigned char> UsedChars;  // Store 1-bit per Unicode code point (0=unused, 1=used)
+//            GlyphRangesBuilder()                { UsedChars.resize(0x10000 / 8); memset(UsedChars.Data, 0, 0x10000 / 8); }
+//            bool           GetBit(int n)        { return (UsedChars[n >> 3] & (1 << (n & 7))) != 0; }
+//            void           SetBit(int n)        { UsedChars[n >> 3] |= 1 << (n & 7); }  // Set bit 'c' in the array
+//            void           AddChar(ImWchar c)   { SetBit(c); }                          // Add character
+//            IMGUI_API void AddText(const char* text, const char* text_end = NULL);      // Add string (each character of the UTF-8 string are added)
+//            IMGUI_API void AddRanges(const ImWchar* ranges);                            // Add ranges, e.g. builder.AddRanges(ImFontAtlas::GetGlyphRangesDefault) to force add all of ASCII/Latin+Ext
+//            IMGUI_API void BuildRanges(ImVector<ImWchar>* out_ranges);                  // Output new ranges
+//        };
 //    //-----------------------------------------------------------------------------
 //    +// ImFontAtlas::GlyphRangesBuilder
 //    +//-----------------------------------------------------------------------------
 //    +
 //    +void ImFontAtlas::GlyphRangesBuilder::AddText(const char* text, const char* text_end)
 //    +{
-//        +    while (text_end ? (text < text_end) : *text)
-//        +    {
-//            +        unsigned int c = 0;
-//            +        int c_len = ImTextCharFromUtf8(&c, text, text_end);
-//            +        text += c_len;
-//            +        if (c_len == 0)
-//                +            break;
-//            +        if (c < 0x10000)
-//                +            AddChar((ImWchar)c);
-//            +    }
+//        while (text_end ? (text < text_end) : *text)
+//        {
+//                unsigned int c = 0;
+//                int c_len = ImTextCharFromUtf8(&c, text, text_end);
+//                text += c_len;
+//                if (c_len == 0)
+//                        break;
+//                if (c < 0x10000)
+//                        AddChar((ImWchar)c);
+//            }
 //        +}
 //    +
 //    +void ImFontAtlas::GlyphRangesBuilder::AddRanges(const ImWchar* ranges)
 //    +{
-//        +    for (; ranges[0]; ranges += 2)
-//        +        for (ImWchar c = ranges[0]; c <= ranges[1]; c++)
-//        +            AddChar(c);
+//        for (; ranges[0]; ranges += 2)
+//            for (ImWchar c = ranges[0]; c <= ranges[1]; c++)
+//                AddChar(c);
 //        +}
 //    +
 //    +void ImFontAtlas::GlyphRangesBuilder::BuildRanges(ImVector<ImWchar>* out_ranges)
 //    +{
-//        +    for (int n = 0; n < 0x10000; n++)
-//        +        if (GetBit(n))
-//            +        {
-//                +            out_ranges->push_back((ImWchar)n);
-//                +            while (n < 0x10000 && GetBit(n + 1))
-//                    +                n++;
-//                +            out_ranges->push_back((ImWchar)n);
-//                +        }
-//        +    out_ranges->push_back(0);
+//        for (int n = 0; n < 0x10000; n++)
+//            if (GetBit(n))
+//                {
+//                        out_ranges->push_back((ImWchar)n);
+//                        while (n < 0x10000 && GetBit(n + 1))
+//                                n++;
+//                        out_ranges->push_back((ImWchar)n);
+//                    }
+//        out_ranges->push_back(0);
 //        +}
 
 
@@ -466,7 +469,7 @@ class FontAtlas {
 
     /** Id needs to be >= 0x10000. Id >= 0x80000000 are reserved for ImGui and DrawList   */
     fun addCustomRectRegular(id: Int, width: Int, height: Int): Int {
-        assert(id >= 0x10000 && width in 0..0xFFFF && height in 0..0xFFFF)
+        assert(id.toULong() >= 0x10000 && width in 0..0xFFFF && height in 0..0xFFFF)
         val r = CustomRect()
         r.id = id
         r.width = width
@@ -489,19 +492,57 @@ class FontAtlas {
         return customRects.lastIndex // Return index
     }
 
+    fun getCustomRectByIndex(index: Int) = customRects.getOrNull(index)
+
+    // Internals
+
     fun calcCustomRectUV(rect: CustomRect, outUvMin: Vec2, outUvMax: Vec2) {
         assert(texSize greaterThan 0)   // Font atlas needs to be built before we can calculate UV coordinates
         assert(rect.isPacked)                // Make sure the rectangle has been packed
-        outUvMin.put(rect.x.f / texSize.x, rect.y.f / texSize.y)
-        outUvMax.put((rect.x + rect.width).f / texSize.x, (rect.y + rect.height).f / texSize.y)
+        outUvMin.put(rect.x.f * texUvScale.x, rect.y.f * texUvScale.y)
+        outUvMax.put((rect.x + rect.width).f * texUvScale.x, (rect.y + rect.height).f * texUvScale.y)
     }
 
-    fun getCustomRectByIndex(index: Int) = customRects.getOrNull(index)
+    fun getMouseCursorTexData(cursor: MouseCursor, outOffset: Vec2, outSize: Vec2, outUv: Array<Vec2>): Boolean {
+
+        if (cursor <= MouseCursor.None || cursor >= MouseCursor.Count) return false
+
+        if (flags has Flags.NoMouseCursors) return false
+
+        val r = customRects[customRectIds[0]]
+        assert(r.id == DefaultTexData.id)
+        val pos = DefaultTexData.cursorDatas[cursor.i][0] + Vec2(r.x, r.y)
+        val size = DefaultTexData.cursorDatas[cursor.i][1]
+        outSize put size
+        outOffset put DefaultTexData.cursorDatas[cursor.i][2]
+        // JVM border
+        outUv[0] = pos * texUvScale
+        outUv[1] = (pos + size) * texUvScale
+        pos.x += DefaultTexData.wHalf + 1
+        // JVM fill
+        outUv[2] = pos * texUvScale
+        outUv[3] = (pos + size) * texUvScale
+        return true
+    }
 
     //-------------------------------------------
     // Members
     //-------------------------------------------
 
+    enum class Flags {
+        /** Don't round the height to next power of two */
+        NoPowerOfTwoHeight,
+        /** Don't build software mouse cursors into the atlas   */
+        NoMouseCursors;
+
+        val i = 1 shl ordinal
+    }
+
+    infix fun Int.has(flag: Flags) = and(flag.i) != 0
+    infix fun Int.hasnt(flag: Flags) = and(flag.i) == 0
+
+    /** Build flags (see ImFontAtlasFlags_) */
+    var flags = 0
     /** User data to refer to the texture once it has been uploaded to user's graphic systems. It is passed back to you
     during rendering via the DrawCmd structure.   */
     var texId = -1
@@ -516,6 +557,8 @@ class FontAtlas {
     var texDesiredWidth = 0
     /** Padding between glyphs within texture in pixels. Defaults to 1. */
     var texGlyphPadding = 1
+    /** = (1.0f/TexWidth, 1.0f/TexHeight)   */
+    var texUvScale = Vec2()
     /** Texture coordinates to a white pixel    */
     var texUvWhitePixel = Vec2()
     /** Hold all the fonts returned by AddFont*. Fonts[0] is the default font upon calling ImGui::NewFrame(), use
@@ -546,7 +589,8 @@ class FontAtlas {
 
         texId = -1
         texSize put 0
-        texUvWhitePixel put 0
+        texUvScale put 0f
+        texUvWhitePixel put 0f
         clearTexData()
         val inRange = IntArray(2)
 
@@ -581,7 +625,8 @@ class FontAtlas {
         // Start packing
         val maxTexHeight = 1024 * 32
         val spc = STBTTPackContext.create()
-        stbtt_PackBegin(spc, null, texSize.x, maxTexHeight, 0, texGlyphPadding, MemoryUtil.NULL)
+        if (!stbtt_PackBegin(spc, null, texSize.x, maxTexHeight, 0, texGlyphPadding, MemoryUtil.NULL))
+            return false
 
         /*  Pack our extra data rectangles first, so it will be on the upper-left corner of our texture (UV will have
             small values).  */
@@ -604,7 +649,10 @@ class FontAtlas {
 
             val fontOffset = stbtt_GetFontOffsetForIndex(cfg.fontDataBuffer, cfg.fontNo)
             assert(fontOffset >= 0)
-            if (!stbtt_InitFont(tmp.fontInfo, cfg.fontDataBuffer, fontOffset)) return false
+            if (!stbtt_InitFont(tmp.fontInfo, cfg.fontDataBuffer, fontOffset)) {
+                texSize put 0   // Reset output on failure
+                return false
+            }
         }
 
         // Allocate packing character data and flag packed characters buffer as non-packed (x0=y0=x1=y1=0)
@@ -631,7 +679,8 @@ class FontAtlas {
                 inRange[1] = cfg.glyphRanges.getOrElse(i++, { 0 })
                 fontRangesCount++
             }
-            tmp.ranges = STBTTPackRange.create(bufRanges.address() + bufRectsN * fontRangesCount, fontRangesCount)
+            var address = bufRanges.address() + bufRangesN * STBTTPackRange.SIZEOF
+            tmp.ranges = STBTTPackRange.create(address, fontRangesCount)
             tmp.rangesCount = fontRangesCount
             bufRangesN += fontRangesCount
             i = 0
@@ -642,7 +691,7 @@ class FontAtlas {
                 range.fontSize = cfg.sizePixels
                 range.firstUnicodeCodepointInRange = inRange[0]
                 range.numChars = (inRange[1] - inRange[0]) + 1
-                val address = bufPackedchars.address() + bufPackedcharsN * STBTTPackedchar.SIZEOF
+                address = bufPackedchars.address() + bufPackedcharsN * STBTTPackedchar.SIZEOF
                 range.chardataForRange = STBTTPackedchar.create(address, range.numChars)
                 bufPackedcharsN += range.numChars
             }
@@ -651,10 +700,10 @@ class FontAtlas {
             tmp.rects = STBRPRect.create(bufRects.address() + bufRectsN * STBRPRect.SIZEOF, fontGlyphsCount)
             tmp.rectsCount = fontGlyphsCount
             bufRectsN += fontGlyphsCount
-            imgui.stb.stbtt_PackSetOversampling(spc, cfg.oversample)
+            stbtt_PackSetOversampling(spc, cfg.oversample)
             val n = stbtt_PackFontRangesGatherRects(spc, tmp.fontInfo, tmp.ranges, tmp.rects)
             assert(n == fontGlyphsCount)
-            stbrp_pack_rects(spc.packInfo, tmp.rects)
+            stbrp_pack_rects(spc.packInfo, tmp.rects)   // fuck, Omar modified his stb_rect_pack.h, we shall also have our own?
 
             // Extend texture height
             for (r in tmp.rects)
@@ -666,7 +715,8 @@ class FontAtlas {
         assert(bufRangesN == totalRangesCount)
 
         // Create texture
-        texSize.y = texSize.y.upperPowerOfTwo
+        texSize.y = if (flags has Flags.NoPowerOfTwoHeight) texSize.y + 1 else texSize.y.upperPowerOfTwo
+        texUvScale = 1f / Vec2(texSize)
         texPixelsAlpha8 = bufferBig(texSize.x * texSize.y)
         spc.pixels = texPixelsAlpha8!!
         spc.height = texSize.y
@@ -675,7 +725,7 @@ class FontAtlas {
         for (input in 0 until configData.size) {
             val cfg = configData[input]
             val tmp = tmpArray[input]
-            imgui.stb.stbtt_PackSetOversampling(spc, cfg.oversample)
+            stbtt_PackSetOversampling(spc, cfg.oversample)
             stbtt_PackFontRangesRenderIntoRects(spc, tmp.fontInfo, tmp.ranges, tmp.rects)
             if (cfg.rasterizerMultiply != 1f) {
                 val multiplyTable = buildMultiplyCalcLookupTable(cfg.rasterizerMultiply)
@@ -683,7 +733,7 @@ class FontAtlas {
                     if (r.wasPacked)
                         buildMultiplyRectAlpha8(multiplyTable, spc.pixels, r, spc.strideInBytes)
             }
-            tmp.rects.free()
+//            tmp.rects.free()
         }
 
         // End packing
@@ -699,7 +749,7 @@ class FontAtlas {
             val dstFont = cfg.dstFont!!
 
             val fontScale = stbtt_ScaleForPixelHeight(tmp.fontInfo, cfg.sizePixels)
-            val (unscaledAscent, unscaledDescent, unscaledLineGap) = imgui.stb.stbtt_GetFontVMetrics(tmp.fontInfo)
+            val (unscaledAscent, unscaledDescent, unscaledLineGap) = stbtt_GetFontVMetrics(tmp.fontInfo)
 
             val ascent = unscaledAscent * fontScale
             val descent = unscaledDescent * fontScale
@@ -735,8 +785,11 @@ class FontAtlas {
     }
 
     fun buildRegisterDefaultCustomRects() {
-        if (customRectIds[0] < 0)
-            customRectIds[0] = addCustomRectRegular(DefaultTexData.id, DefaultTexData.wHalf * 2 + 1, DefaultTexData.h)
+        if (customRectIds[0] >= 0) return
+        customRectIds[0] = when {
+            flags hasnt Flags.NoMouseCursors -> addCustomRectRegular(DefaultTexData.id, DefaultTexData.wHalf * 2 + 1, DefaultTexData.h)
+            else -> addCustomRectRegular(DefaultTexData.id, 2, 2)
+        }
     }
 
     fun buildSetupFont(font: Font, fontConfig: FontConfig, ascent: Float, descent: Float) {
@@ -796,39 +849,34 @@ class FontAtlas {
 
     fun buildRenderDefaultTexData() {
 
+        assert(customRectIds[0] >= 0 && texPixelsAlpha8 != null)
         val r = customRects[customRectIds[0]]
-        assert(r.width == DefaultTexData.wHalf * 2 + 1 && r.height == DefaultTexData.h)
-        assert(r.isPacked && texPixelsAlpha8 != null)
+        assert(r.id == DefaultTexData.id && r.isPacked)
 
-        // Render/copy pixels
-        var n = 0
-        for (y in 0 until DefaultTexData.h)
-            for (x in 0 until DefaultTexData.wHalf) {
-                val offset0 = r.x + x + (r.y + y) * texSize.x
-                val offset1 = offset0 + DefaultTexData.wHalf + 1
-                texPixelsAlpha8!![offset0] = if (DefaultTexData.pixels[n] == '.') 0xFF.b else 0x00.b
-                texPixelsAlpha8!![offset1] = if (DefaultTexData.pixels[n] == 'X') 0xFF.b else 0x00.b
-                n++
+        val w = texSize.x
+        if (flags hasnt Flags.NoMouseCursors) {
+            // Render/copy pixels
+            assert(r.width == DefaultTexData.wHalf * 2 + 1 && r.height == DefaultTexData.h)
+            var n = 0
+            for (y in 0 until DefaultTexData.h)
+                for (x in 0 until DefaultTexData.wHalf) {
+                    val offset0 = r.x + x + (r.y + y) * w
+                    val offset1 = offset0 + DefaultTexData.wHalf + 1
+                    texPixelsAlpha8!![offset0] = if (DefaultTexData.pixels[n] == '.') 0xFF.b else 0x00.b
+                    texPixelsAlpha8!![offset1] = if (DefaultTexData.pixels[n] == 'X') 0xFF.b else 0x00.b
+                    n++
+                }
+        } else {
+            assert(r.width == 2 && r.height == 2)
+            val offset = r.x.i + r.y.i * w
+            with(texPixelsAlpha8!!) {
+                put(offset + w + 1, 0xFF.b)
+                put(offset + w, 0xFF.b)
+                put(offset + 1, 0xFF.b)
+                put(offset, 0xFF.b)
             }
-        val texUvScale = Vec2(1f / texSize.x, 1f / texSize.y)
-        texUvWhitePixel = Vec2((r.x + 0.5f) * texUvScale.x, (r.y + 0.5f) * texUvScale.y)
-
-        // Setup mouse cursors
-
-
-        for (type in 0 until MouseCursor.Count.i) {
-            val cursorData = g.mouseCursorData[type]
-            val pos = DefaultTexData.cursorDatas[type][0] + Vec2(r.x, r.y)
-            val size = DefaultTexData.cursorDatas[type][1]
-            cursorData.type = MouseCursor.of(type)
-            cursorData.size = size
-            cursorData.hotOffset = DefaultTexData.cursorDatas[type][2]
-            cursorData.texUvMin[0] = pos * texUvScale
-            cursorData.texUvMax[0] = (pos + size) * texUvScale
-            pos.x += DefaultTexData.wHalf + 1
-            cursorData.texUvMin[1] = pos * texUvScale
-            cursorData.texUvMax[1] = (pos + size) * texUvScale
         }
+        texUvWhitePixel = (Vec2(r.x, r.y) + 0.5f) * texUvScale
     }
 
     fun buildMultiplyCalcLookupTable(inBrightenFactor: Float) = CharArray(256, {
@@ -1004,12 +1052,12 @@ class Font {
     }
 
     //    IMGUI_API void              SetFallbackChar(ImWchar c);
-    // TODO bug, rename back
-    fun getCharAdvance_aaaaaaaaaaa(c: Char) = if (c < indexAdvanceX.size) indexAdvanceX[c.i] else fallbackAdvanceX
+    fun getCharAdvance(c: Char) = if (c < indexAdvanceX.size) indexAdvanceX[c.i] else fallbackAdvanceX
 
     var loaded = false
     val isLoaded get() = loaded
 
+    val debugName get() = configData.getOrNull(0)?.name ?: "<unknown>"
 
     /*  'maxWidth' stops rendering after a certain width (could be turned into a 2d size). FLT_MAX to disable.
         'wrapWidth' enable automatic word-wrapping across multiple lines to fit into given width. 0.0f to disable. */
@@ -1444,9 +1492,13 @@ class Font {
         assert(isLoaded)    // Font Atlas not created. Did you call io.Fonts->GetTexDataAsRGBA32 / GetTexDataAsAlpha8 ?
         assert(scale > 0f)
         g.font = this
-        g.fontBaseSize = IO.fontGlobalScale * g.font.fontSize * g.font.scale
+        g.fontBaseSize = io.fontGlobalScale * g.font.fontSize * g.font.scale
         g.fontSize = g.currentWindow?.calcFontSize() ?: 0f
-        g.fontTexUvWhitePixel = g.font.containerAtlas.texUvWhitePixel
+
+        val atlas = g.font.containerAtlas
+        g.drawListSharedData.texUvWhitePixel put atlas.texUvWhitePixel
+        g.drawListSharedData.font = g.font
+        g.drawListSharedData.fontSize = g.fontSize
     }
 }
 

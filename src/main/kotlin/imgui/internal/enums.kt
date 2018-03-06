@@ -4,6 +4,9 @@ package imgui.internal
 // Types
 //-----------------------------------------------------------------------------
 
+// Internal Drag and Drop payload types. String starting with '_' are reserved for Dear ImGui.
+val PAYLOAD_TYPE_DOCKABLE = "_IMDOCK"   // ImGuiWindow* // [Internal] Docking/tabs
+
 enum class ButtonFlags {
 
     Null,
@@ -18,19 +21,24 @@ enum class ButtonFlags {
     /** return true on double-click (default requires click+release) */
     PressedOnDoubleClick,
     /** allow interactions even if a child window is overlapping */
-    FlattenChilds,
-    /** disable automatically closing parent popup on press [UNUSED] */
+    FlattenChildren,
+    /** require previous frame HoveredId to either match id or be null before being usable, use along with setItemAllowOverlap() */
+    AllowItemOverlap,
+    /** disable automatically closing parent popup on press // [UNUSED] */
     DontClosePopups,
     /** disable interactions */
     Disabled,
-    /** vertically align button to match text baseline (buttonEx() only)    */
+    /** vertically align button to match text baseline - ButtonEx() only
+     *  FIXME: Should be removed and handled by SmallButton(), not possible currently because of DC.CursorPosPrevLine */
     AlignTextBaseLine,
-    /** disable interaction if a key modifier is held   */
+    /** disable interaction if a key modifier is held */
     NoKeyModifiers,
-    /** require previous frame HoveredId to either match id or be null before being usable  */
-    AllowOverlapMode,
-    /** don't set ActiveId while holding the mouse (ImGuiButtonFlags_PressedOnClick only)   */
-    NoHoldingActiveID;
+    /** don't set ActiveId while holding the mouse (ButtonFlags.PressedOnClick only) */
+    NoHoldingActiveID,
+    /** press when held into while we are drag and dropping another item (used by e.g. tree nodes, collapsing headers) */
+    PressedOnDragDropHold,
+    /** don't override navigation focus when activated; */
+    NoNavFocus;
 
     val i = if (ordinal == 0) 0 else 1 shl (ordinal - 1)
 
@@ -76,6 +84,17 @@ infix fun Int.or(b: SeparatorFlags) = this or b.i
 infix fun Int.has(b: SeparatorFlags) = (this and b.i) != 0
 infix fun Int.hasnt(b: SeparatorFlags) = (this and b.i) == 0
 
+/** Storage for LastItem data   */
+enum class ItemStatusFlags { HoveredRect, HasDisplayRect;
+
+    val i = 1 shl ordinal
+}
+
+infix fun Int.wo(b: ItemStatusFlags) = and(b.i.inv())
+infix fun Int.or(b: ItemStatusFlags) = or(b.i)
+infix fun Int.has(b: ItemStatusFlags) = and(b.i) != 0
+infix fun Int.hasnt(b: ItemStatusFlags) = and(b.i) == 0
+
 /** FIXME: this is in development, not exposed/functional as a generic feature yet. */
 enum class LayoutType { Vertical, Horizontal;
 
@@ -87,6 +106,8 @@ enum class Axis { None, X, Y;
     val i = ordinal - 1
 }
 
+infix fun Int.shl(b: Axis) = shl(b.i)
+
 enum class PlotType { Lines, Histogram;
 
     val i = ordinal
@@ -97,10 +118,58 @@ enum class DataType { Int, Float, Vec2;
     val i = ordinal
 }
 
-enum class Dir { None, Left, Right, Up, Down;
+enum class Dir { None, Left, Right, Up, Down, Count;
 
     val i = ordinal - 1
+
+    companion object {
+        fun of(i: Int) = values()[i]
+    }
 }
+
+infix fun Int.shl(b: Dir) = shl(b.i)
+
+enum class InputSource { None, Mouse, Nav,
+    /** Only used occasionally for storage, not tested/handled by most code */
+    NavKeyboard,
+    /** Only used occasionally for storage, not tested/handled by most code */
+    NavGamepad;
+
+    val i = ordinal
+
+    companion object {
+        val COUNT = values().size
+    }
+}
+
+// FIXME-NAV: Clarify/expose various repeat delay/rate
+enum class InputReadMode { Down, Pressed, Released, Repeat, RepeatSlow, RepeatFast;
+
+    val i = ordinal
+}
+
+enum class NavHighlightFlags { TypeDefault, TypeThin, AlwaysDraw, NoRounding;
+
+    val i = 1 shl ordinal
+}
+
+infix fun Int.has(b: NavHighlightFlags) = and(b.i) != 0
+infix fun Int.hasnt(b: NavHighlightFlags) = and(b.i) == 0
+infix fun NavHighlightFlags.or(b: NavHighlightFlags) = i or b.i
+
+enum class NavDirSourceFlags { Keyboard, PadDPad, PadLStick;
+
+    val i = 1 shl ordinal
+}
+
+infix fun NavDirSourceFlags.or(b: NavDirSourceFlags) = i or b.i
+infix fun Int.has(b: NavDirSourceFlags) = and(b.i) != 0
+
+enum class NavForward { None, ForwardQueued, ForwardActive;
+
+    val i = ordinal
+}
+
 
 // TODO check enum declarance position
 enum class DrawCornerFlags(val i: Int) {
@@ -121,3 +190,15 @@ infix fun Int.or(b: DrawCornerFlags) = or(b.i)
 infix fun Int.and(b: DrawCornerFlags) = and(b.i)
 infix fun Int.has(b: DrawCornerFlags) = (this and b.i) != 0
 infix fun Int.hasnt(b: DrawCornerFlags) = (this and b.i) == 0
+
+// TODO check enum declarance position
+enum class DrawListFlags { AntiAliasedLines, AntiAliasedFill;
+
+    val i = 1 shl ordinal
+}
+
+infix fun DrawListFlags.or(b: DrawListFlags) = i or b.i
+infix fun Int.or(b: DrawListFlags) = or(b.i)
+infix fun Int.and(b: DrawListFlags) = and(b.i)
+infix fun Int.has(b: DrawListFlags) = (this and b.i) != 0
+infix fun Int.hasnt(b: DrawListFlags) = (this and b.i) == 0

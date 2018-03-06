@@ -18,8 +18,9 @@ buildscript {
     repositories {
         jcenter()   // shadow
         mavenCentral()
-        maven { url "https://dl.bintray.com/kotlin/kotlin-eap" }
-        maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
+        maven { setUrl("https://dl.bintray.com/kotlin/kotlin-eap") }
+        maven { setUrl("https://oss.sonatype.org/content/repositories/snapshots/") }
+        maven { setUrl('https://jitpack.io') }
     }
 
     dependencies {
@@ -32,7 +33,7 @@ dependencies {
 
     compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
 
-    compile 'com.github.kotlin-graphics:uno-sdk:2585927ade0c632dae11157d4fb486a0b9c78676'
+    compile 'com.github.kotlin-graphics:uno-sdk:1dcf49b9e6701e6eb5983667ac7a9a01af8e2baf'
 
     testCompile 'io.kotlintest:kotlintest:2.0.7'
 
@@ -40,7 +41,7 @@ dependencies {
     testCompile "org.jogamp.gluegen:gluegen-rt-main:$joglVersion"
     testCompile "org.jogamp.jogl:jogl-all-main:$joglVersion"
 
-    switch ( OperatingSystem.current() ) {
+    switch (OperatingSystem.current()) {
         case OperatingSystem.WINDOWS:
             ext.lwjglNatives = "natives-windows"
             break
@@ -58,26 +59,42 @@ dependencies {
     compile "org.lwjgl:lwjgl-openal:${lwjglVersion}"
     compile "org.lwjgl:lwjgl-opengl:${lwjglVersion}"
     compile "org.lwjgl:lwjgl-stb:${lwjglVersion}"
-    testRuntime "org.lwjgl:lwjgl:${lwjglVersion}:${lwjglNatives}"
-    testRuntime "org.lwjgl:lwjgl-glfw:${lwjglVersion}:${lwjglNatives}"
-    testRuntime "org.lwjgl:lwjgl-jemalloc:${lwjglVersion}:${lwjglNatives}"
-    testRuntime "org.lwjgl:lwjgl-openal:${lwjglVersion}:${lwjglNatives}"
-    testRuntime "org.lwjgl:lwjgl-opengl:${lwjglVersion}:${lwjglNatives}"
-    testRuntime "org.lwjgl:lwjgl-stb:${lwjglVersion}:${lwjglNatives}"
+    [
+            "org.lwjgl:lwjgl:${lwjglVersion}:${lwjglNatives}",
+            "org.lwjgl:lwjgl-glfw:${lwjglVersion}:${lwjglNatives}",
+            "org.lwjgl:lwjgl-jemalloc:${lwjglVersion}:${lwjglNatives}",
+            "org.lwjgl:lwjgl-openal:${lwjglVersion}:${lwjglNatives}",
+            "org.lwjgl:lwjgl-opengl:${lwjglVersion}:${lwjglNatives}",
+            "org.lwjgl:lwjgl-stb:${lwjglVersion}:${lwjglNatives}"
+    ].each {
+        testRuntime it
+        shadow it
+    }
 
     compile files("${System.properties['java.home']}/../lib/tools.jar")
 }
 
 repositories {
     mavenCentral()
-    maven { url "https://dl.bintray.com/kotlin/kotlin-eap" }
-    maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
-    maven { url 'https://jitpack.io' }
+    maven { setUrl("https://dl.bintray.com/kotlin/kotlin-eap") }
+    maven { setUrl('https://jitpack.io') }
 }
 
-task packageSources(type: Jar, dependsOn: 'classes') {
-    from sourceSets.main.allSource
+task sourcesJar(type: Jar, dependsOn: classes) {
     classifier = 'sources'
+    from sourceSets.main.allSource
 }
 
-artifacts { archives packageSources }
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+shadowJar {
+    exclude 'module-info.class'
+}

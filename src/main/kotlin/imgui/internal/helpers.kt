@@ -1,13 +1,11 @@
 package imgui.internal
 
-import glm_.c
-import glm_.glm
-import glm_.i
+import glm_.*
 import glm_.vec2.Vec2
+import glm_.vec2.Vec2i
 import glm_.vec4.Vec4
-import glm_.xor
 import imgui.NUL
-import imgui.Context as g
+import java.nio.ByteBuffer
 
 // -----------------------------------------------------------------------------------------------------------------
 // Helpers: UTF-8 <> wchar
@@ -82,6 +80,13 @@ import imgui.Context as g
 // -----------------------------------------------------------------------------------------------------------------
 // Helpers: Misc
 // -----------------------------------------------------------------------------------------------------------------
+
+fun hash(data: IntArray, seed: Int = 0): Int {
+    val buffer = ByteBuffer.allocate(data.size * Int.BYTES)
+    for (i in data.indices) buffer.putInt(i * Int.BYTES, data[i])
+    val bytes = ByteArray(buffer.size, { buffer[it] })
+    return hash(String(bytes), bytes.size, seed)
+}
 
 /** Pass data_size==0 for zero-terminated strings
 FIXME-OPT: Replace with e.g. FNV1a hash? CRC32 pretty much randomly access 1KB. Need to do proper measurements. */
@@ -230,6 +235,8 @@ fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 fun lerp(a: Int, b: Int, t: Float) = (a + (b - a) * t).i
 fun Vec2.lerp(b: Vec2, t: Float) = Vec2(x + (b.x - x) * t, y + (b.y - y) * t)
 fun Vec2.lerp(b: Vec2, t: Vec2) = Vec2(x + (b.x - x) * t.x, y + (b.y - y) * t.y)
+fun Vec2.lerp(b: Vec2i, t: Vec2) = Vec2(x + (b.x - x) * t.x, y + (b.y - y) * t.y)
+fun Vec2i.lerp(b: Vec2i, t: Vec2) = Vec2(x + (b.x - x) * t.x, y + (b.y - y) * t.y)
 fun Vec4.lerp(b: Vec4, t: Float) = Vec4(x + (b.x - x) * t, y + (b.y - y) * t, z + (b.z - z) * t, w + (b.w - w) * t)
 
 fun Vec2.invLength(failValue: Float): Float {

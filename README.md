@@ -2,8 +2,8 @@
 
 [![Build Status](https://travis-ci.org/kotlin-graphics/imgui.svg?branch=master)](https://travis-ci.org/kotlin-graphics/imgui) 
 [![license](https://img.shields.io/badge/License-MIT-orange.svg)](https://github.com/kotlin-graphics/imgui/blob/master/LICENSE) 
-![](https://reposs.herokuapp.com/?path=kotlin-graphics/imgui&color=yellow) 
 [![Release](https://jitpack.io/v/kotlin-graphics/imgui.svg)](https://jitpack.io/#kotlin-graphics/imgui) 
+![](https://reposs.herokuapp.com/?path=kotlin-graphics/imgui&color=yellow) 
 [![Github All Releases](https://img.shields.io/github/downloads/kotlin-graphics/imgui/total.svg)]()
 [![Slack Status](http://slack.kotlinlang.org/badge.svg)](http://slack.kotlinlang.org/)
 
@@ -65,10 +65,33 @@ Dear ImGui allows you create elaborate tools as well as very short-lived ones. O
 ### Gallery
 -------
 
-See the [Screenshots Thread](https://github.com/ocornut/imgui/issues/123) for some user creations.
-Also see the [Mega screenshots](https://github.com/ocornut/imgui/issues/1273) for an idea of the available features.
+User screenshots:
+<br>[Gallery Part 1](https://github.com/ocornut/imgui/issues/123) (Feb 2015 to Feb 2016)
+<br>[Gallery Part 2](https://github.com/ocornut/imgui/issues/539) (Feb 2016 to Aug 2016)
+<br>[Gallery Part 3](https://github.com/ocornut/imgui/issues/772) (Aug 2016 to Jan 2017)
+<br>[Gallery Part 4](https://github.com/ocornut/imgui/issues/973) (Jan 2017 to Aug 2017)
+<br>[Gallery Part 5](https://github.com/ocornut/imgui/issues/1269) (Aug 2017 onward)
+<br>Also see the [Mega screenshots](https://github.com/ocornut/imgui/issues/1273) for an idea of the available features.
 
-![Sample](https://cloud.githubusercontent.com/assets/8225057/20628927/33e14cac-b329-11e6-80f6-9524e93b048a.png)
+![screenshot 1](https://raw.githubusercontent.com/wiki/ocornut/imgui/web/v148/examples_01.png)
+
+Various tools
+<br>[![screenshot game](https://raw.githubusercontent.com/wiki/ocornut/imgui/web/v149/gallery_TheDragonsTrap-01-thumb.jpg)](https://cloud.githubusercontent.com/assets/8225057/20628927/33e14cac-b329-11e6-80f6-9524e93b048a.png)
+
+Custom profiler
+<br>[![screenshot profiler](https://raw.githubusercontent.com/wiki/ocornut/imgui/web/v148/profiler-880.jpg)](https://raw.githubusercontent.com/wiki/ocornut/imgui/web/v148/profiler.png)
+
+Color Pickers
+<br>![screenshot picker](https://user-images.githubusercontent.com/8225057/29062188-471e95ba-7c53-11e7-9618-c4484c0b75fe.PNG)
+
+Menus
+<br>![screenshot 5](https://raw.githubusercontent.com/wiki/ocornut/imgui/web/v151/menus.png)
+
+Colors
+<br>![screenshot 6](https://raw.githubusercontent.com/wiki/ocornut/imgui/web/v143/skinning_sample_02.png)
+
+Custom rendering
+<br>![screenshot 7](https://raw.githubusercontent.com/wiki/ocornut/imgui/web/v160/v160-drawdatabase.jpg)
 
 ImGui supports also other languages, such as japanese, initiliazed [here](https://github.com/kotlin-graphics/imgui/blob/master/src/test/kotlin/imgui/test_lwjgl.kt#L67) as:
 

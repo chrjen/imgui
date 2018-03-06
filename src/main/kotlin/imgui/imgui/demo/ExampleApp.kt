@@ -5,7 +5,6 @@ import glm_.c
 import glm_.f
 import glm_.i
 import glm_.vec2.Vec2
-import glm_.vec2.Vec2i
 import glm_.vec4.Vec4
 import imgui.*
 import imgui.ImGui._begin
@@ -26,10 +25,12 @@ import imgui.ImGui.dummy
 import imgui.ImGui.end
 import imgui.ImGui.endChild
 import imgui.ImGui.endGroup
+import imgui.ImGui.frameCount
+import imgui.ImGui.frameHeightWithSpacing
 import imgui.ImGui.image
 import imgui.ImGui.inputFloat
+import imgui.ImGui.io
 import imgui.ImGui.isMouseHoveringRect
-import imgui.ImGui.itemsLineHeightWithSpacing
 import imgui.ImGui.logButtons
 import imgui.ImGui.logFinish
 import imgui.ImGui.logToClipboard
@@ -38,32 +39,30 @@ import imgui.ImGui.nextColumn
 import imgui.ImGui.popFont
 import imgui.ImGui.popId
 import imgui.ImGui.popItemWidth
-import imgui.ImGui.popStyleColor
 import imgui.ImGui.popStyleVar
 import imgui.ImGui.pushFont
 import imgui.ImGui.pushId
 import imgui.ImGui.pushItemWidth
-import imgui.ImGui.pushStyleColor
 import imgui.ImGui.pushStyleVar
 import imgui.ImGui.radioButton
 import imgui.ImGui.sameLine
 import imgui.ImGui.selectable
 import imgui.ImGui.separator
+import imgui.ImGui.setNextWindowBgAlpha
 import imgui.ImGui.setNextWindowPos
 import imgui.ImGui.setNextWindowSize
 import imgui.ImGui.setNextWindowSizeConstraints
 import imgui.ImGui.setScrollHere
 import imgui.ImGui.setWindowFontScale
 import imgui.ImGui.setWindowSize
+import imgui.ImGui.showFontSelector
+import imgui.ImGui.showStyleSelector
 import imgui.ImGui.showUserGuide
 import imgui.ImGui.sliderFloat
 import imgui.ImGui.sliderInt
 import imgui.ImGui.sliderVec2
 import imgui.ImGui.spacing
 import imgui.ImGui.style
-import imgui.ImGui.styleColorsClassic
-import imgui.ImGui.styleColorsDark
-import imgui.ImGui.styleColorsLight
 import imgui.ImGui.text
 import imgui.ImGui.textUnformatted
 import imgui.ImGui.textWrapped
@@ -75,7 +74,6 @@ import imgui.ImGui.windowDrawList
 import imgui.ImGui.windowWidth
 import imgui.functionalProgramming.button
 import imgui.functionalProgramming.collapsingHeader
-import imgui.functionalProgramming.combo
 import imgui.functionalProgramming.mainMenuBar
 import imgui.functionalProgramming.menu
 import imgui.functionalProgramming.menuBar
@@ -89,15 +87,14 @@ import imgui.functionalProgramming.withId
 import imgui.functionalProgramming.withItemWidth
 import imgui.functionalProgramming.withTooltip
 import imgui.functionalProgramming.withWindow
-import imgui.imgui.imgui_demoDebugInfo.Companion.showExampleMenuFile
-import imgui.imgui.imgui_demoDebugInfo.Companion.showHelpMarker
+import imgui.imgui.imgui_demoDebugInformations.Companion.showExampleMenuFile
+import imgui.imgui.imgui_demoDebugInformations.Companion.showHelpMarker
 import java.util.*
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.reflect.KMutableProperty0
 import imgui.ColorEditFlags as Cef
-import imgui.Context as g
 import imgui.InputTextFlags as Itf
 import imgui.SelectableFlags as Sf
 import imgui.TreeNodeFlags as Tnf
@@ -115,7 +112,7 @@ object ExampleApp {
         var autoResize = false
         var constrainedResize = false
         var fixedOverlay = false
-        var manipulatingWindowTitle = false
+        var windowTitles = false
         var customRendering = false
         var styleEditor = false
 
@@ -129,10 +126,14 @@ object ExampleApp {
     var noMove = false
     var noResize = false
     var noCollapse = false
+    var noClose = false
+    var noNav = false
 
     var filter = TextFilter()
 
-    operator fun invoke(open: KMutableProperty0<Boolean>) {
+    operator fun invoke(open: KMutableProperty0<Boolean>?) {
+
+        var open = open
 
         if (show.mainMenuBar) MainMenuBar()
         if (show.console) Console(show::console)
@@ -143,7 +144,7 @@ object ExampleApp {
         if (show.autoResize) AutoResize(show::autoResize)
         if (show.constrainedResize) ConstrainedResize(show::constrainedResize)
         if (show.fixedOverlay) FixedOverlay(show::fixedOverlay)
-        if (show.manipulatingWindowTitle) ManipulatingWindowTitle(show::manipulatingWindowTitle)
+        if (show.windowTitles) WindowTitles(show::windowTitles)
         if (show.customRendering) CustomRendering(show::customRendering)
         if (show.metrics) ImGui.showMetricsWindow(show::metrics)
         if (show.styleEditor)
@@ -152,11 +153,11 @@ object ExampleApp {
             }
 
         if (show.about)
-            withWindow("About ImGui", show::about, Wf.AlwaysAutoResize.i) {
-                text("JVM ImGui, $version")
+            withWindow("About Dear ImGui", show::about, Wf.AlwaysAutoResize.i) {
+                text("JVM Dear ImGui, $version")
                 separator()
-                text("Original by Omar Cornut, ported by Giuseppe Barbieri and all github contributors.")
-                text("ImGui is licensed under the MIT License, see LICENSE for more information.")
+                text("Original by Omar Cornut, ported by Giuseppe Barbieri and all dear imgui contributors.")
+                text("Dear ImGui is licensed under the MIT License, see LICENSE for more information.")
             }
 
         // Demonstrate the various window flags. Typically you would just use the default.
@@ -167,6 +168,8 @@ object ExampleApp {
         if (noMove) windowFlags = windowFlags or Wf.NoMove
         if (noResize) windowFlags = windowFlags or Wf.NoResize
         if (noCollapse) windowFlags = windowFlags or Wf.NoCollapse
+        if (noClose) open = null // Don't pass our bool* to Begin
+        if (noNav) windowFlags = windowFlags or Wf.NoNav
         setNextWindowSize(Vec2(550, 680), Cond.FirstUseEver)
         if (!_begin("ImGui Demo", open, windowFlags)) {
             end()   // Early out if the window is collapsed, as an optimization.
@@ -191,19 +194,19 @@ object ExampleApp {
                 menuItem("Auto-resizing window", "", ExampleApp.show::autoResize)
                 menuItem("Constrained-resizing window", "", ExampleApp.show::constrainedResize)
                 menuItem("Simple overlay", "", ExampleApp.show::fixedOverlay)
-                menuItem("Manipulating window title", "", ExampleApp.show::manipulatingWindowTitle)
+                menuItem("Manipulating window titles", "", ExampleApp.show::windowTitles)
                 menuItem("Custom rendering", "", ExampleApp.show::customRendering)
             }
             menu("Help") {
                 menuItem("Metrics", "", ExampleApp.show::metrics)
                 menuItem("Style Editor", "", ExampleApp.show::styleEditor)
-                menuItem("About ImGui", "", ExampleApp.show::about)
+                menuItem("About Dear ImGui", "", ExampleApp.show::about)
             }
         }
 
         spacing()
         collapsingHeader("Help") {
-            textWrapped("This window is being created by the ShowTestWindow() function. Please refer to the code " +
+            textWrapped("This window is being created by the ShowDemoWindow() function. Please refer to the code " +
                     "for programming reference.\n\nUser Guide:")
             showUserGuide()
         }
@@ -216,10 +219,12 @@ object ExampleApp {
             checkbox("No move", ::noMove); sameLine(150)
             checkbox("No resize", ::noResize)
             checkbox("No collapse", ::noCollapse)
+            checkbox("No close", ::noClose); sameLine(150)
+            checkbox("No nav", ::noNav)
 
             treeNode("Style") { StyleEditor() }
 
-            treeNode("Logging") {
+            treeNode("Capture/Logging") {
                 textWrapped("The logging API redirects all text output so you can easily capture the content of a " +
                         "window or a block. Tree nodes can be automatically expanded. You can also call LogText() to " +
                         "output directly to the log without a visual output.")
@@ -248,7 +253,7 @@ object ExampleApp {
 //                ImGui::BulletText("%s", lines[i]);
         }
 
-        inputAndFocus()
+        inputNavigationAndFocus()
     }
 }
 
@@ -361,7 +366,8 @@ object Console {
 //            ImGui::PopStyleVar();
 //            ImGui::Separator();
 //
-//            ImGui::BeginChild("ScrollingRegion", ImVec2(0,-ImGui::GetItemsLineHeightWithSpacing()), false, ImGuiWindowFlags_HorizontalScrollbar);
+//            const float footer_height_to_reserve = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing(); // 1 separator, 1 input text
+//            ImGui::BeginChild("ScrollingRegion", ImVec2(0, -footer_height_to_reserve), false, ImGuiWindowFlags_HorizontalScrollbar); // Leave room for 1 separator + 1 InputText
 //            if (ImGui::BeginPopupContextWindow())
 //            {
 //                if (ImGui::Selectable("Clear")) ClearLog();
@@ -382,12 +388,13 @@ object Console {
 //            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4,1)); // Tighten spacing
 //            if (copy_to_clipboard)
 //                ImGui::LogToClipboard();
+//            ImVec4 col_default_text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
 //            for (int i = 0; i < Items.Size; i++)
 //            {
 //                const char* item = Items[i];
 //                if (!filter.PassFilter(item))
 //                    continue;
-//                ImVec4 col = ImVec4(1.0f,1.0f,1.0f,1.0f); // A better implementation may store a type per-item. For the sample let's just parse the text.
+//                ImVec4 col = col_default_text;
 //                if (strstr(item, "[error]")) col = ImColor(1.0f,0.4f,0.4f,1.0f);
 //                else if (strncmp(item, "# ", 2) == 0) col = ImColor(1.0f,0.78f,0.58f,1.0f);
 //                ImGui::PushStyleColor(ImGuiCol_Text, col);
@@ -404,6 +411,7 @@ object Console {
 //            ImGui::Separator();
 //
 //            // Command-line
+//            bool reclaim_focus = false;
 //            if (ImGui::InputText("Input", InputBuf, IM_ARRAYSIZE(InputBuf), ImGuiInputTextFlags_EnterReturnsTrue|ImGuiInputTextFlags_CallbackCompletion|ImGuiInputTextFlags_CallbackHistory, &TextEditCallbackStub, (void*)this))
 //            {
 //                char* input_end = InputBuf+strlen(InputBuf);
@@ -411,10 +419,12 @@ object Console {
 //                if (InputBuf[0])
 //                    ExecCommand(InputBuf);
 //                strcpy(InputBuf, "");
+//                reclaim_focus = true;
 //            }
 //
-//            // Demonstrate keeping auto focus on the input box
-//            if (ImGui::IsItemHovered() || (ImGui::IsRootWindowOrAnyChildFocused() && !ImGui::IsAnyItemActive() && !ImGui::IsMouseClicked(0)))
+//            // Demonstrate keeping focus on the input box
+//            ImGui::SetItemDefaultFocus();
+//            if (reclaim_focus)
 //                ImGui::SetKeyboardFocusHere(-1); // Auto focus previous widget
 //
 //            ImGui::End();
@@ -578,10 +588,10 @@ object Log {
 
         // Demo: add random items (unless Ctrl is held)
         val time = g.time
-        if (time - lastTime >= 0.2f && !IO.keyCtrl) {
+        if (time - lastTime >= 0.2f && !io.keyCtrl) {
             val s = randomWords[rand % randomWords.size]
             val t = "%.1f".format(style.locale, time)
-            log.addLog("[$s] Hello, time is $t, rand() $rand\n")
+            log.addLog("[$s] Hello, time is $t, frame count is $frameCount\n")
             lastTime = time
         }
         log.draw("Example: Log (Filter not yet implemented)", open)
@@ -667,17 +677,15 @@ object Layout {
 
             // right
             beginGroup()
-            beginChild("item view", Vec2(0, -itemsLineHeightWithSpacing)) // Leave room for 1 line below us
+            beginChild("item view", Vec2(0, -frameHeightWithSpacing)) // Leave room for 1 line below us
             text("MyObject: ${selectedChild}")
             separator()
             textWrapped("Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor " +
                     "incididunt ut labore et dolore magna aliqua. ")
             endChild()
-            beginChild("buttons")
-            if (button("Revert")) Unit
+            button("Revert") {}
             sameLine()
-            if (button("Save")) Unit
-            endChild()
+            button("Save") {}
             endGroup()
         }
         end()
@@ -869,13 +877,11 @@ object ConstrainedResize {
 
     /** Helper functions to demonstrate programmatic constraints    */
     object CustomConstraints {
-        val square: SizeConstraintCallback = { _: Any?, _: Vec2i, _: Vec2, desiredSize: Vec2 ->
-            desiredSize put max(desiredSize.x, desiredSize.y)
-        }
-        val step: SizeConstraintCallback = { userData: Any?, _: Vec2i, _: Vec2, desiredSize: Vec2 ->
-            val step = (userData as Int).f
-            desiredSize.x = (desiredSize.x / step + 0.5f).i * step
-            desiredSize.y = (desiredSize.y / step + 0.5f).i * step
+        val square: SizeCallback = { it.desiredSize put max(it.desiredSize.x, it.desiredSize.y) }
+        val step: SizeCallback = {
+            val step = (it.userData as Int).f
+            it.desiredSize.x = (it.desiredSize.x / step + 0.5f).i * step
+            it.desiredSize.y = (it.desiredSize.y / step + 0.5f).i * step
         }
 
     }
@@ -890,31 +896,32 @@ object FixedOverlay {
     operator fun invoke(open: KMutableProperty0<Boolean>) {
 
         val DISTANCE = 10f
-        val windowPos = Vec2(if (corner has 1) IO.displaySize.x - DISTANCE else DISTANCE,
-                if (corner has 2) IO.displaySize.y - DISTANCE else DISTANCE)
+        val windowPos = Vec2(if (corner has 1) io.displaySize.x - DISTANCE else DISTANCE,
+                if (corner has 2) io.displaySize.y - DISTANCE else DISTANCE)
         val windowPosPivot = Vec2(if (corner has 1) 1f else 0f, if (corner has 2) 1f else 0f)
         setNextWindowPos(windowPos, Cond.Always, windowPosPivot)
-        pushStyleColor(Col.WindowBg, Vec4(0f, 0f, 0f, 0.3f))  // Transparent background
-        withWindow("Example: Fixed Overlay", open, Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings) {
+        setNextWindowBgAlpha(0.3f)  // Transparent background
+        val flags = Wf.NoTitleBar or Wf.NoResize or Wf.AlwaysAutoResize or Wf.NoMove or Wf.NoSavedSettings or Wf.NoFocusOnAppearing or Wf.NoNav
+        withWindow("Example: Fixed Overlay", open, flags) {
             text("Simple overlay\nin the corner of the screen.\n(right-click to change position)")
             separator()
-            text("Mouse Position: (%.1f,%.1f)".format(IO.mousePos.x, IO.mousePos.y))
+            text("Mouse Position: (%.1f,%.1f)".format(io.mousePos.x, io.mousePos.y))
             popupContextWindow {
                 menuItem("Top-left", "", corner == 0) { corner = 0 }
                 menuItem("Top-right", "", corner == 1) { corner = 1 }
                 menuItem("Bottom-left", "", corner == 2) { corner = 2 }
                 menuItem("Bottom-right", "", corner == 3) { corner = 3 }
+                if (open() && menuItem("Close")) open.set(false)
             }
         }
-        popStyleColor()
     }
 }
 
-object ManipulatingWindowTitle {
+object WindowTitles {
 
     /** Demonstrate using "##" and "###" in identifiers to manipulate ID generation.
-     *  Read section "How can I have multiple widgets with the same label? Can I have widget without a label? (Yes).
-     *  A primer on the purpose of labels/IDs." about ID.   */
+     *  This apply to regular items as well. Read FAQ section "How can I have multiple widgets with the same label?
+     *  Can I have widget without a label? (Yes). A primer on the purpose of labels/IDs." for details.   */
     operator fun invoke(open: KMutableProperty0<Boolean>) {
         /*  By default, Windows are uniquely identified by their title.
             You can use the "##" and "###" markers to manipulate the display/ID.
@@ -930,7 +937,7 @@ object ManipulatingWindowTitle {
         }
 
         // Using "###" to display a changing title but keep a static identifier "AnimatedTitle"
-        val title = "Animated title ${"|/-\\"[(time / 0.25f).i and 3]} ${glm_.detail.Random.int}###AnimatedTitle"
+        val title = "Animated title ${"|/-\\"[(time / 0.25f).i and 3]} $frameCount###AnimatedTitle"
         setNextWindowPos(Vec2(100, 300), Cond.FirstUseEver)
         withWindow(title) { text("This window has a changing title.") }
     }
@@ -986,7 +993,7 @@ object CustomRendering {
 //                draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x+sz, y+sz), col32); x += sz+spacing;
 //                draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x+sz, y+sz), col32, 10.0f); x += sz+spacing;
 //                draw_list->AddTriangleFilled(ImVec2(x+sz*0.5f, y), ImVec2(x+sz,y+sz-0.5f), ImVec2(x,y+sz-0.5f), col32); x += sz+spacing;
-//                draw_list->AddRectFilledMultiColor(ImVec2(x, y), ImVec2(x+sz, y+sz), ImColor(0,0,0), ImColor(255,0,0), ImColor(255,255,0), ImColor(0,255,0));
+//                draw_list->AddRectFilledMultiColor(ImVec2(x, y), ImVec2(x+sz, y+sz), COL32(0,0,0,255), COL32(255,0,0,255), COL32(255,255,0,255), COL32(0,255,0,255));
 //                ImGui::Dummy(ImVec2((sz+spacing)*8, (sz+spacing)*3));
 //            }
 //            ImGui::Separator();
@@ -1005,8 +1012,8 @@ object CustomRendering {
 //                ImVec2 canvas_size = ImGui::GetContentRegionAvail();        // Resize canvas to what's available
 //                if (canvas_size.x < 50.0f) canvas_size.x = 50.0f;
 //                if (canvas_size.y < 50.0f) canvas_size.y = 50.0f;
-//                draw_list->AddRectFilledMultiColor(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), ImColor(50,50,50), ImColor(50,50,60), ImColor(60,60,70), ImColor(50,50,60));
-//                draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), ImColor(255,255,255));
+//                draw_list->AddRectFilledMultiColor(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(50,50,50,255), IM_COL32(50,50,60,255), IM_COL32(60,60,70,255), IM_COL32(50,50,60,255));
+//                draw_list->AddRect(canvas_pos, ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y), IM_COL32(255,255,255,255));
 //
 //                bool adding_preview = false;
 //                ImGui::InvisibleButton("canvas", canvas_size);
@@ -1015,7 +1022,7 @@ object CustomRendering {
 //                {
 //                    adding_preview = true;
 //                    points.push_back(mouse_pos_in_canvas);
-//                    if (!ImGui::GetIO().MouseDown[0])
+//                    if (!ImGui::IsMouseDown[0])
 //                        adding_line = adding_preview = false;
 //                }
 //                if (ImGui::IsItemHovered())
@@ -1068,17 +1075,13 @@ object StyleEditor {
         // Default to using internal storage as reference
         if (init && ref == null) refSavedStyle = Style(style)
         init = false
-        var ref = if (ref == null) refSavedStyle else ref
+        var ref = ref ?: refSavedStyle
 
         pushItemWidth(windowWidth * 0.55f)
-        combo("Colors##Selector", ::styleIdx, "Classic\u0000Dark\u0000Light\u0000") {
-            when (styleIdx) {
-                0 -> styleColorsClassic()
-                1 -> styleColorsDark()
-                2 -> styleColorsLight()
-            }
+        if (showStyleSelector("Colors##Selector"))
             refSavedStyle = Style(style)
-        }
+
+        showFontSelector("Fonts##Selector")
 
         // Simplified Settings
         if (sliderFloat("FrameRounding", style::frameRounding, 0f, 12f, "%.0f"))
@@ -1104,13 +1107,13 @@ object StyleEditor {
             ref = style
         }
         sameLine()
-        if (button("Revert Ref")) style = ref!!
+        if (button("Revert Ref")) g.style = ref!!
         sameLine()
         showHelpMarker("Save/Revert in local non-persistent storage. Default Colors definition are not affected. Use \"Export Colors\" below to save them somewhere.")
 
         treeNode("Rendering") {
             checkbox("Anti-aliased lines", style::antiAliasedLines)
-            checkbox("Anti-aliased shapes", style::antiAliasedShapes)
+            checkbox("Anti-aliased fill", style::antiAliasedFill)
             pushItemWidth(100)
             dragFloat("Curve Tessellation Tolerance", style::curveTessellationTol, 0.02f, 0.1f, Float.MAX_VALUE, "", 2f)
             if (style.curveTessellationTol < 0f) style.curveTessellationTol = 0.1f
@@ -1175,7 +1178,8 @@ object StyleEditor {
             radioButton("Alpha", ::alphaFlags, Cef.AlphaPreview.i); sameLine()
             radioButton("Both", ::alphaFlags, Cef.AlphaPreviewHalf.i)
 
-            withChild("#colors", Vec2(0, 300), true, Wf.AlwaysVerticalScrollbar or Wf.AlwaysHorizontalScrollbar) {
+            val flags = Wf.AlwaysVerticalScrollbar or Wf.AlwaysHorizontalScrollbar or Wf.NavFlattened
+            withChild("#colors", Vec2(0, 300), true, flags) {
                 withItemWidth(-160) {
                     for (i in 0 until Col.COUNT) {
                         val name = Col.values()[i].name
@@ -1186,7 +1190,7 @@ object StyleEditor {
                             if (style.colors[i] != ref!!.colors[i]) {
                                 /*  Tips: in a real user application, you may want to merge and use an icon font into
                                     the main font, so instead of "Save"/"Revert" you'd use icons.
-                                    Read the FAQ and extra_fonts/README.txt about using icon fonts. It's really easy
+                                    Read the FAQ and misc/fonts/README.txt about using icon fonts. It's really easy
                                     and super convenient!  */
                                 sameLine(0f, style.itemInnerSpacing.x)
                                 if (button("Save")) ref!!.colors[i] = Vec4(style.colors[i])
@@ -1201,10 +1205,10 @@ object StyleEditor {
             }
         }
 
-        val fontsOpened = treeNode("Fonts", "Fonts (${IO.fonts.fonts.size})")
-        sameLine(); showHelpMarker("Tip: Load fonts with IO.fonts.addFontFromFileTTF()\nbefore calling IO.fonts.getTex* functions.")
+        val fontsOpened = treeNode("Fonts", "Fonts (${io.fonts.fonts.size})")
+        sameLine(); showHelpMarker("Tip: Load fonts with io.fonts.addFontFromFileTTF()\nbefore calling io.fonts.getTex* functions.")
         if (fontsOpened) {
-            val atlas = IO.fonts
+            val atlas = io.fonts
             treeNode("Atlas texture", "Atlas texture (${atlas.texSize.x}x${atlas.texSize.y} pixels)") {
                 image(atlas.texId, Vec2(atlas.texSize), Vec2(), Vec2(1), Vec4.fromColor(255, 255, 255, 255),
                         Vec4.fromColor(255, 255, 255, 128))
@@ -1215,7 +1219,7 @@ object StyleEditor {
                 val font = atlas.fonts[i]
                 val name = font.configData.getOrNull(0)?.name ?: ""
                 val fontDetailsOpened = bulletText("Font $i: '$name', %.2f px, ${font.glyphs.size} glyphs", font.fontSize)
-                sameLine(); smallButton("Set as default") { IO.fontDefault = font }
+                sameLine(); smallButton("Set as default") { io.fontDefault = font }
                 if (fontsOpened) {
                     pushFont(font)
                     text("The quick brown fox jumps over the lazy dog")
@@ -1223,6 +1227,7 @@ object StyleEditor {
                     val scale = floatArrayOf(font.scale)
                     // Scale only this font
                     dragFloat("Font scale", scale, 0.005f, 0.3f, 2f, "%.1f")
+                    inputFloat("Font offset", font.displayOffset::y, 1f, 1f, 0)
                     font.scale = scale[0]
                     sameLine()
                     showHelpMarker("""
@@ -1281,9 +1286,9 @@ object StyleEditor {
             val pF = floatArrayOf(windowScale)
             dragFloat("this window scale", pF, 0.005f, 0.3f, 2f, "%.1f")    // scale only this window
             windowScale = pF[0]
-            pF[0] = IO.fontGlobalScale
+            pF[0] = io.fontGlobalScale
             dragFloat("global scale", pF, 0.005f, 0.3f, 2f, "%.1f") // scale everything
-            IO.fontGlobalScale = pF[0]
+            io.fontGlobalScale = pF[0]
             popItemWidth()
             setWindowFontScale(windowScale)
         }

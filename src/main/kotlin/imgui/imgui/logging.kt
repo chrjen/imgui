@@ -1,8 +1,6 @@
 package imgui.imgui
 
 import imgui.ImGui.button
-import imgui.Context as g
-import imgui.ImGui.currentWindowRead
 import imgui.ImGui.popAllowKeyboardFocus
 import imgui.ImGui.popId
 import imgui.ImGui.popItemWidth
@@ -10,10 +8,13 @@ import imgui.ImGui.pushAllowKeyboardFocus
 import imgui.ImGui.pushId
 import imgui.ImGui.pushItemWidth
 import imgui.ImGui.sameLine
+import imgui.ImGui.setClipboardText
 import imgui.ImGui.sliderInt
+import imgui.g
+import java.io.FileWriter
 
-/** Logging: all text output from interface is redirected to tty/file/clipboard. By default, tree nodes are
- *  automatically opened during logging.    */
+/** Logging/Capture: all text output from interface is captured to tty/file/clipboard.
+ *  By default, tree nodes are automatically opened during logging.    */
 interface imgui_logging {
 
 //    IMGUI_API void          LogToTTY(int max_depth = -1);                                       // start logging to tty
@@ -26,8 +27,9 @@ interface imgui_logging {
 
         val window = g.currentWindow!!
 
-        g.logEnabled = true
+        assert(g.logFile != null)
         g.logFile = null
+        g.logEnabled = true
         g.logStartDepth = window.dc.treeDepth
         if (maxDepth >= 0)
             g.logAutoExpandMaxDepth = maxDepth
@@ -39,22 +41,16 @@ interface imgui_logging {
 
         if (!g.logEnabled) return
 
-        TODO()
-//        LogText(IM_NEWLINE);
-//        g.LogEnabled = false;
-//        if (g.LogFile != NULL)
-//        {
-//            if (g.LogFile == stdout)
-//                fflush(g.LogFile);
-//            else
-//                fclose(g.LogFile);
-//            g.LogFile = NULL;
-//        }
-//        if (g.LogClipboard->size() > 1)
-//        {
-//            SetClipboardText(g.LogClipboard->begin());
-//            g.LogClipboard->clear();
-//        }
+        logText("%s","\n")
+
+        if(g.logFile != null){
+            g.logFile = null
+        }
+        if(g.logClipboard.length > 1){
+            setClipboardText(g.logClipboard.toString())
+            g.logClipboard = StringBuilder()
+        }
+        g.logEnabled = false
     }
 
     /** Helper to display buttons for logging to tty/file/clipboard */
@@ -78,21 +74,14 @@ interface imgui_logging {
 
     /** pass text data straight to log (without being displayed)    */
     fun logText(fmt: String, vararg args: Any) {
-        TODO()
-//        ImGuiContext& g = *GImGui;
-//        if (!g.LogEnabled)
-//            return;
-//
-//        va_list args;
-//        va_start(args, fmt);
-//        if (g.LogFile)
-//        {
-//            vfprintf(g.LogFile, fmt, args);
-//        }
-//        else
-//        {
-//            g.LogClipboard->appendv(fmt, args);
-//        }
-//        va_end(args);
+        if(!g.logEnabled)
+            return
+
+        if(g.logFile != null) {
+            val writer = FileWriter(g.logFile, true)
+            writer.write(String.format(fmt, args))
+        }else{
+            g.logClipboard.append(String.format(fmt, args))
+        }
     }
 }

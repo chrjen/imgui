@@ -20,6 +20,7 @@ import glm_.vec4.Vec4i
 import gln.buf
 import gln.glf.semantic
 import imgui.*
+import imgui.ImGui.io
 import uno.buffer.bufferBig
 import uno.buffer.destroy
 import uno.buffer.intBufferBig
@@ -32,8 +33,6 @@ object JoglVrGL3 {
     val texSize = Vec2i()
     var time = 0.0
     val mouseJustPressed = BooleanArray(3)
-    @JvmField
-    var mouseWheel = 0f
 
     object Buffer {
         val Vertex = 0
@@ -53,7 +52,7 @@ object JoglVrGL3 {
         this.window = window
         this.texSize put texSize
 
-        with(IO) {
+        with(io) {
             // Keyboard mapping. ImGui will use those indices to peek into the io.KeyDown[] array.
             keyMap[Key.Tab] = KeyEvent.VK_TAB.i
             keyMap[Key.LeftArrow] = KeyEvent.VK_LEFT.i
@@ -64,8 +63,10 @@ object JoglVrGL3 {
             keyMap[Key.PageDown] = KeyEvent.VK_PAGE_DOWN.i
             keyMap[Key.Home] = KeyEvent.VK_HOME.i
             keyMap[Key.End] = KeyEvent.VK_END.i
+            keyMap[Key.Insert] = KeyEvent.VK_INSERT.i
             keyMap[Key.Delete] = KeyEvent.VK_DELETE.i
             keyMap[Key.Backspace] = KeyEvent.VK_BACK_SPACE.i
+            keyMap[Key.Space] = KeyEvent.VK_SPACE.i
             keyMap[Key.Enter] = KeyEvent.VK_ENTER.i
             keyMap[Key.Escape] = KeyEvent.VK_ESCAPE.i
             keyMap[Key.A] = KeyEvent.VK_A.i
@@ -74,10 +75,6 @@ object JoglVrGL3 {
             keyMap[Key.X] = KeyEvent.VK_X.i
             keyMap[Key.Y] = KeyEvent.VK_Y.i
             keyMap[Key.Z] = KeyEvent.VK_Z.i
-
-            /* Alternatively you can set this to NULL and call ImGui::GetDrawData() after ImGui::Render() to get the
-               same ImDrawData pointer.             */
-            renderDrawListsFn = this@JoglVrGL3::renderDrawLists
         }
 
         if (installCallbacks) {
@@ -103,36 +100,31 @@ object JoglVrGL3 {
         if (fontTexture[0] < 0) gl.createDeviceObjects()
 
         // Setup display size (every frame to accommodate for window resizing)
-        IO.displaySize put texSize
-        IO.displayFramebufferScale.x = 1f //if (window.width > 0) window.framebufferSize.x / window.size.x.f else 0f
-        IO.displayFramebufferScale.y = 1f //if (window.height > 0) window.framebufferSize.y / window.size.y.f else 0f
+        io.displaySize put texSize
+        io.displayFramebufferScale.x = 1f //if (window.width > 0) window.framebufferSize.x / window.size.x.f else 0f
+        io.displayFramebufferScale.y = 1f //if (window.height > 0) window.framebufferSize.y / window.size.y.f else 0f
 
         // Setup time step
         val currentTime = System.nanoTime() / 1e9
-        IO.deltaTime = if (time > 0) (currentTime - time).f else 1f / 60f
+        io.deltaTime = if (time > 0) (currentTime - time).f else 1f / 60f
         time = currentTime
 
-        /*  Setup inputs
-            (we already got mouse wheel, keyboard keys & characters from glfw callbacks polled in glfwPollEvents())
-            Mouse position in screen coordinates (set to -1,-1 if no mouse / on another screen, etc.)   */
+        //  Setup inputs
 //        if (window.hasFocus())
-        IO.mousePos put cursorPos
+        io.mousePos put cursorPos
 //        else
-//            IO.mousePos put -Float.MAX_VALUE
+//            io.mousePos put -Float.MAX_VALUE
 
         repeat(3) {
             /*  If a mouse press event came, always pass it as "mouse held this frame", so we don't miss click-release
                 events that are shorter than 1 frame.   */
-            IO.mouseDown[it] = mouseJustPressed[it]
+            io.mouseDown[it] = mouseJustPressed[it]
         }
 
-        IO.mouseWheel = mouseWheel
-        mouseWheel = 0f
-
         // Hide OS mouse cursor if ImGui is drawing it
-//        window.isPointerVisible = !IO.mouseDrawCursor
+//        window.isPointerVisible = !io.mouseDrawCursor
 
-        /*  Start the frame. This call will update the IO.wantCaptureMouse, IO.wantCaptureKeyboard flag that you can use
+        /*  Start the frame. This call will update the io.wantCaptureMouse, io.wantCaptureKeyboard flag that you can use
             to dispatch inputs (or not) to your application.         */
         ImGui.newFrame()
     }
@@ -243,7 +235,7 @@ object JoglVrGL3 {
         /*  Load as RGBA 32-bits (75% of the memory is wasted, but default font is so small) because it is more likely
             to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than
             just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.  */
-        val (pixels, size) = IO.fonts.getTexDataAsRGBA32()
+        val (pixels, size) = io.fonts.getTexDataAsRGBA32()
 
         // Upload texture to graphics system
         val lastTexture = glGetInteger(GL_TEXTURE_BINDING_2D)
@@ -252,10 +244,11 @@ object JoglVrGL3 {
         glBindTexture(GL_TEXTURE_2D, fontTexture[0])
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels)
 
         // Store our identifier
-        IO.fonts.texId = fontTexture[0]
+        io.fonts.texId = fontTexture[0]
 
         // Restore state
         glBindTexture(GL_TEXTURE_2D, lastTexture)
@@ -265,19 +258,18 @@ object JoglVrGL3 {
         return true
     }
 
-    /** This is the main rendering function that you have to implement and provide to ImGui (via setting up
-     *  'RenderDrawListsFn' in the ImGuiIO structure)
+    /** OpenGL3 Render function.
+     *  (this used to be set in io.renderDrawListsFn and called by ImGui::render(), but you can now call this directly
+     *  from your main loop)
      *  Note that this implementation is little overcomplicated because we are saving/setting up/restoring every OpenGL
-     *  state explicitly, in order to be able to run within any OpenGL engine that doesn't do so.
-     *  If text or lines are blurry when integrating ImGui in your engine: in your Render function, try translating your
-     *  projection matrix by (0.5f,0.5f) or (0.375f,0.375f) */
-    fun renderDrawLists(drawData: DrawData) = with(gl) {
+     *  state explicitly, in order to be able to run within any OpenGL engine that doesn't do so.   */
+    fun renderDrawData(drawData: DrawData) = with(gl) {
 
         /** Avoid rendering when minimized, scale coordinates for retina displays
          *  (screen coordinates != framebuffer coordinates) */
-        val fbSize = IO.displaySize * IO.displayFramebufferScale
+        val fbSize = io.displaySize * io.displayFramebufferScale
         if (fbSize equal 0) return
-        drawData.scaleClipRects(IO.displayFramebufferScale)
+        drawData.scaleClipRects(io.displayFramebufferScale)
 
         // Backup GL state
         val lastActiveTexture = glGetInteger(GL_ACTIVE_TEXTURE)
@@ -312,7 +304,7 @@ object JoglVrGL3 {
 
         // Setup viewport, orthographic projection matrix
         glViewport(0, 0, fbSize.x, fbSize.y)
-        val ortho = glm.ortho(mat, 0f, IO.displaySize.x.f, IO.displaySize.y.f, 0f)
+        val ortho = glm.ortho(mat, 0f, io.displaySize.x.f, io.displaySize.y.f, 0f)
         glUseProgram(program.name)
         glUniformMatrix4fv(program.mat, 1, false, (ortho to buf).asFloatBuffer())
 
@@ -398,13 +390,14 @@ object JoglVrGL3 {
         }
 
         override fun mouseWheelMoved(e: MouseEvent) {
-            mouseWheel += e.rotation[1] // Use fractional mouse wheel.
+            io.mouseWheel += e.rotation[1]
+            io.mouseWheelH += e.rotation[0] // unchecked
         }
     }
 
     private object keyCallback : KeyListener {
         //        (void) mods // Modifiers are not reliable across systems
-        override fun keyPressed(e: KeyEvent) = with(IO) {
+        override fun keyPressed(e: KeyEvent) = with(io) {
             if (e.keyCode <= keysDown.size) keysDown[e.keyCode.i] = true
             if (e.keyCode == KeyEvent.VK_WINDOWS) keySuper = true
             keyCtrl = e.isControlDown
@@ -412,7 +405,7 @@ object JoglVrGL3 {
             keyAlt = e.isAltDown
         }
 
-        override fun keyReleased(e: KeyEvent) = with(IO) {
+        override fun keyReleased(e: KeyEvent) = with(io) {
             if (e.keyCode <= keysDown.size) keysDown[e.keyCode.i] = false
             if (e.keyCode == KeyEvent.VK_WINDOWS) keySuper = false
             keyCtrl = e.isControlDown
@@ -425,7 +418,6 @@ object JoglVrGL3 {
         invalidateDeviceObjects(gl)
         window.removeMouseListener(mouseCallback)
         window.removeKeyListener(keyCallback)
-        ImGui.shutdown()
     }
 
     private fun invalidateDeviceObjects(gl: GL3) = with(gl) {
@@ -437,7 +429,7 @@ object JoglVrGL3 {
 
         if (fontTexture[0] >= 0) {
             glDeleteTextures(1, fontTexture)
-            IO.fonts.texId = -1
+            io.fonts.texId = -1
             fontTexture[0] = -1
         }
     }

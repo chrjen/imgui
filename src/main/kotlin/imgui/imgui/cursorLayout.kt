@@ -6,21 +6,21 @@ import glm_.glm
 import glm_.i
 import glm_.vec2.Vec2
 import imgui.Col
-import imgui.Context.style
 import imgui.ImGui.currentWindow
 import imgui.ImGui.currentWindowRead
 import imgui.ImGui.itemAdd
 import imgui.ImGui.itemSize
 import imgui.ImGui.popClipRect
 import imgui.ImGui.pushColumnClipRect
+import imgui.ImGui.style
 import imgui.ImGui.verticalSeparator
+import imgui.g
 import imgui.internal.GroupData
 import imgui.internal.Rect
 import imgui.internal.has
 import imgui.internal.isPowerOfTwo
 import imgui.internal.or
 import imgui.logRenderedText
-import imgui.Context as g
 import imgui.internal.LayoutType as Lt
 import imgui.internal.SeparatorFlags as Sf
 
@@ -43,8 +43,7 @@ interface imgui_cursorLayout {
             return
         }
         // Horizontal Separator
-        if (window.dc.columnsCount > 1)
-            popClipRect()
+        window.dc.columnsSet?.let { popClipRect() }
 
         var x1 = window.pos.x
         val x2 = window.pos.x + window.size.x
@@ -54,9 +53,8 @@ interface imgui_cursorLayout {
         val bb = Rect(Vec2(x1, window.dc.cursorPos.y), Vec2(x2, window.dc.cursorPos.y + 1f))
         // NB: we don't provide our width so that it doesn't get feed back into AutoFit, we don't provide height to not alter layout.
         itemSize(Vec2())
-        if (!itemAdd(bb)) {
-            if (window.dc.columnsCount > 1)
-                pushColumnClipRect()
+        if (!itemAdd(bb, 0)) {
+            window.dc.columnsSet?.let { pushColumnClipRect() }
             return
         }
 
@@ -65,9 +63,9 @@ interface imgui_cursorLayout {
         if (g.logEnabled)
             logRenderedText(null, "\n--------------------------------")
 
-        if (window.dc.columnsCount > 1)        {
+        window.dc.columnsSet?.let {
             pushColumnClipRect()
-            window.dc.columnsCellMinY = window.dc.cursorPos.y
+            it.cellMinY = window.dc.cursorPos.y
         }
     }
 
@@ -122,18 +120,18 @@ interface imgui_cursorLayout {
 
         val bb = Rect(window.dc.cursorPos, window.dc.cursorPos + size)
         itemSize(bb)
-        itemAdd(bb)
+        itemAdd(bb, 0)
     }
 
-    /** move content position toward the right, by style.IndentSpacing or indent_w if >0    */
+    /** move content position toward the right, by style.indentSpacing or indentW if != 0    */
     fun indent(indentW: Float = 0f) = with(currentWindow) {
-        dc.indentX += if (indentW > 0f) indentW else style.indentSpacing
+        dc.indentX += if (indentW != 0f) indentW else style.indentSpacing
         dc.cursorPos.x = pos.x + dc.indentX + dc.columnsOffsetX
     }
 
-    /** move content position back to the left, by style.IndentSpacing or indent_w if >0    */
+    /** move content position back to the left, by style.IndentSpacing or indentW if != 0    */
     fun unindent(indentW: Float = 0f) = with(currentWindow) {
-        dc.indentX -= if (indentW > 0f) indentW else style.indentSpacing
+        dc.indentX -= if (indentW != 0f) indentW else style.indentSpacing
         dc.cursorPos.x = pos.x + dc.indentX + dc.columnsOffsetX
     }
 
@@ -172,7 +170,6 @@ interface imgui_cursorLayout {
         val groupData = window.dc.groupStack.last()
 
         val groupBb = Rect(groupData.backupCursorPos, window.dc.cursorMaxPos)
-        groupBb.max.y -= style.itemSpacing.y      // Cancel out last vertical spacing because we are adding one ourselves.
         groupBb.max = glm.max(groupBb.min, groupBb.max)
 
         with(window.dc) {
@@ -188,7 +185,7 @@ interface imgui_cursorLayout {
         if (groupData.advanceCursor) {
             window.dc.currentLineTextBaseOffset = glm.max(window.dc.prevLineTextBaseOffset, groupData.backupCurrentLineTextBaseOffset)      // FIXME: Incorrect, we should grab the base offset from the *first line* of the group but it is hard to obtain now.
             itemSize(groupBb.size, groupData.backupCurrentLineTextBaseOffset)
-            itemAdd(groupBb)
+            itemAdd(groupBb, 0)
         }
 
         /*  If the current ActiveId was declared within the boundary of our group, we copy it to LastItemId so
@@ -253,14 +250,17 @@ interface imgui_cursorLayout {
         window.dc.currentLineTextBaseOffset = glm.max(window.dc.currentLineTextBaseOffset, style.framePadding.y)
     }
 
-    /** height of font == GetWindowFontSize()   */
+    /** ~ FontSize   */
     val textLineHeight get() = g.fontSize
 
-    /** distance (in pixels) between 2 consecutive lines of text == GetWindowFontSize() + GetStyle().ItemSpacing.y  */
+    /** ~ FontSize + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of text)  */
     val textLineHeightWithSpacing get() = g.fontSize + style.itemSpacing.y
+
+    /** ~ FontSize + style.FramePadding.y * 2 */
+    val frameHeight get() = g.fontSize + style.framePadding.y * 2f
 
     /** distance (in pixels) between 2 consecutive lines of standard height widgets ==
      *  GetWindowFontSize() + GetStyle().FramePadding.y*2 + GetStyle().ItemSpacing.y    */
-    val itemsLineHeightWithSpacing get() = g.fontSize + style.framePadding.y * 2f + style.itemSpacing.y
+    val frameHeightWithSpacing get() = g.fontSize + style.framePadding.y * 2f + style.itemSpacing.y
 
 }

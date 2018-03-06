@@ -1,21 +1,23 @@
 package imgui
 
-import com.sun.jdi.Bootstrap
 import com.sun.jdi.VirtualMachine
-import com.sun.jdi.connect.AttachingConnector
-import com.sun.jdi.connect.Connector.Argument
 import glm_.glm
 import glm_.vec2.Vec2
 import glm_.vec2.Vec2i
 import glm_.vec4.Vec4
 import imgui.internal.*
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.*
 import kotlin.collections.ArrayList
 
-object Context {
+class Context(sharedFontAtlas: FontAtlas? = null) {
 
     var initialized = false
+    /** Io.Fonts-> is owned by the ImGuiContext and will be destructed along with it.   */
+    var fontAtlasOwnedByContext = sharedFontAtlas != null
+
+    var io = IO(sharedFontAtlas)
 
     var style = Style()
 
@@ -24,10 +26,11 @@ object Context {
     var fontSize = 0f
     /** (Shortcut) == IO.FontGlobalScale * Font->Scale * Font->FontSize. Base text height.    */
     var fontBaseSize = 0f
-    /** (Shortcut) == Font->TexUvWhitePixel */
-    var fontTexUvWhitePixel = Vec2()
 
-    var time = 0.0f
+    var drawListSharedData = DrawListSharedData()
+
+
+    var time = 0f
 
     var frameCount = 0
 
@@ -42,10 +45,10 @@ object Context {
     val currentWindowStack = Stack<Window>()
 
     val windowsById = mutableMapOf<Int, Window>()
+
+    var windowsActiveCount = 0
     /** Being drawn into    */
     var currentWindow: Window? = null
-    /** Will catch keyboard inputs  */
-    var navWindow: Window? = null
     /** Will catch mouse inputs */
     var hoveredWindow: Window? = null
     /** Will catch mouse inputs (for focus/move only)   */
@@ -70,18 +73,17 @@ object Context {
     var activeIdIsJustActivated = false
     /** Active widget allows another widget to steal active id (generally for overlapping widgets, but not always)   */
     var activeIdAllowOverlap = false
+    /** Active widget allows using directional navigation (e.g. can activate a button and move away from it)    */
+    var activeIdAllowNavDirFlags = 0
     /** Clicked offset from upper-left corner, if applicable (currently only set by ButtonBehavior) */
     var activeIdClickOffset = Vec2(-1)
 
     var activeIdWindow: Window? = null
-    /** Track the child window we clicked on to move a window.  */
+    /** Activating with mouse or nav (gamepad/keyboard) */
+    var activeIdSource = InputSource.None
+    /** Track the window we clicked on (in order to preserve focus).
+     *  The actually window that is moved is generally MovingWindow.rootWindow.  */
     var movingWindow: Window? = null
-    /** == MovedWindow->RootWindow->MoveId  */
-    var movingdWindowMoveId = 0
-    /** .ini Settings   */
-    val settings = ArrayList<IniData>()
-    /** Save .ini Settings on disk when time reaches zero   */
-    var settingsDirtyTimer = 0f
     /** Stack for PushStyleColor()/PopStyleColor()  */
     var colorModifiers = Stack<ColMod>()
     /** Stack for PushStyleVar()/PopStyleVar()  */
@@ -93,57 +95,134 @@ object Context {
     /** Which level of BeginPopup() we are in (reset every frame)   */
     val currentPopupStack = Stack<PopupRef>()
 
-    // Storage for SetNexWindow** and SetNextTreeNode*** functions
-    var setNextWindowPosVal = Vec2()
+    /** Storage for SetNextWindow** functions   */
+    val nextWindowData = NextWindowData()
+    /** Storage for SetNextTreeNode** functions */
+    var nextTreeNodeOpenVal = false
 
-    var setNextWindowPosPivot = Vec2()
-
-    var setNextWindowSizeVal = Vec2()
-
-    var setNextWindowContentSizeVal = Vec2()
-
-    var setNextWindowCollapsedVal = false
-
-    var setNextWindowPosCond = Cond.Null
-
-    var setNextWindowSizeCond = Cond.Always
-
-    var setNextWindowContentSizeCond = Cond.Null
-
-    var setNextWindowCollapsedCond = Cond.Null
-    /** Valid if 'SetNextWindowSizeConstraint' is true  */
-    var setNextWindowSizeConstraintRect = Rect()
-
-    var setNextWindowSizeConstraintCallback: SizeConstraintCallback? = null
-
-    var setNextWindowSizeConstraintCallbackUserData: Any? = null
-
-    var setNextWindowSizeConstraint = false
-
-    var setNextWindowFocus = false
-
-    var setNextTreeNodeOpenVal = false
-
-    var setNextTreeNodeOpenCond = 0
+    var nextTreeNodeOpenCond = Cond.Null
 
     //------------------------------------------------------------------
+    // Navigation data (for gamepad/keyboard)
+    //------------------------------------------------------------------
+
+    /** Focused window for navigation. Could be called 'FocusWindow'    */
+    var navWindow: Window? = null
+    /** Focused item for navigation */
+    var navId = 0
+    /** ~~ (g.activeId == 0) && NavInput.Activate.isPressed() ? navId : 0, also set when calling activateItem() */
+    var navActivateId = 0
+    /** ~~ isNavInputDown(NavInput.Activate) ? navId : 0   */
+    var navActivateDownId = 0
+    /** ~~ NavInput.Activate.isPressed() ? navId : 0    */
+    var navActivatePressedId = 0
+    /** ~~ NavInput.Input.isPressed() ? navId : 0   */
+    var navInputId = 0
+    /** Just tabbed to this id. */
+    var navJustTabbedId = 0
+    /** Set by ActivateItem(), queued until next frame  */
+    var navNextActivateId = 0
+    /** Just navigated to this id (result of a successfully MoveRequest)    */
+    var navJustMovedToId = 0
+    /** Rectangle used for scoring, in screen space. Based of window.dc.navRefRectRel[], modified for directional navigation scoring.  */
+    var navScoringRectScreen = Rect()
+    /** Metrics for debugging   */
+    var navScoringCount = 0
+    /** When selecting a window (holding Menu+FocusPrev/Next, or equivalent of CTRL-TAB) this window is temporarily displayed front-most.   */
+    var navWindowingTarget: Window? = null
+
+    var navWindowingHighlightTimer = 0f
+
+    var navWindowingHighlightAlpha = 0f
+
+    var navWindowingToggleLayer = false
+    /** Gamepad or keyboard mode    */
+    var navWindowingInputSource = InputSource.None
+    /** Layer we are navigating on. For now the system is hard-coded for 0 = main contents and 1 = menu/title bar,
+     *  may expose layers later. */
+    var navLayer = 0
+    /** == NavWindow->DC.FocusIdxTabCounter at time of NavId processing */
+    var navIdTabCounter = Int.MAX_VALUE
+    /** Nav widget has been seen this frame ~~ NavRefRectRel is valid   */
+    var navIdIsAlive = false
+    /** When set we will update mouse position if (NavFlags & ImGuiNavFlags_MoveMouse) if set (NB: this not enabled by default) */
+    var navMousePosDirty = false
+    /** When user starts using mouse, we hide gamepad/keyboard highlight (nb: but they are still available, which is why
+     *  navDisableHighlight isn't always != navDisableMouseHover)  */
+    var navDisableHighlight = true
+    /** When user starts using gamepad/keyboard, we hide mouse hovering highlight until mouse is touched again. */
+    var navDisableMouseHover = false
+    /** ~~ navMoveRequest || navInitRequest */
+    var navAnyRequest = false
+    /** Init request for appearing window to select first item  */
+    var navInitRequest = false
+
+    var navInitRequestFromMove = false
+
+    var navInitResultId = 0
+
+    var navInitResultRectRel = Rect()
+    /** Set by manual scrolling, if we scroll to a point where NavId isn't visible we reset navigation from visible items   */
+    var navMoveFromClampedRefRect = false
+    /** Move request for this frame */
+    var navMoveRequest = false
+    /** None / ForwardQueued / ForwardActive (this is used to navigate sibling parent menus from a child menu)  */
+    var navMoveRequestForward = NavForward.None
+    /** Direction of the move request (left/right/up/down), direction of the previous move request  */
+    var navMoveDir = Dir.None
+    /** Direction of the move request (left/right/up/down), direction of the previous move request  */
+    var navMoveDirLast = Dir.None
+    /** Best move request candidate within NavWindow    */
+    val navMoveResultLocal = NavMoveResult()
+    /** Best move request candidate within NavWindow's flattened hierarchy (when using the NavFlattened flag)   */
+    val navMoveResultOther = NavMoveResult()
+
+
+    // ------------------------------------------------------------------
     // Render
     //------------------------------------------------------------------
 
     /** Main ImDrawData instance to pass render information to the user */
-    var renderDrawData = DrawData()
+    var drawData = DrawData()
 
-    val renderDrawLists = Array(3, { ArrayList<DrawList>() })
+    val drawDataBuilder = DrawDataBuilder()
 
     var modalWindowDarkeningRatio = 0f
     /** Optional software render of mouse cursors, if io.MouseDrawCursor is set + a few debug overlays  */
-    var overlayDrawList = DrawList().apply {
+    var overlayDrawList = DrawList(null).apply {
+        _data = drawListSharedData
         _ownerName = "##Overlay" // Give it a name for debugging
     }
 
     var mouseCursor = MouseCursor.Arrow
 
-    val mouseCursorData = Array(MouseCursor.Count.i, { MouseCursorData() })
+
+    //------------------------------------------------------------------
+    // Drag and Drop
+    //------------------------------------------------------------------
+    var dragDropActive = false
+
+    var dragDropSourceFlags = 0
+
+    var dragDropMouseButton = -1
+
+    var dragDropPayload = Payload()
+
+    var dragDropTargetRect = Rect()
+
+    var dragDropTargetId = 0
+
+    var dragDropAcceptIdCurrRectSurface = 0f
+    /** Target item id (set at the time of accepting the payload) */
+    var dragDropAcceptIdCurr = 0
+    /** Target item id from previous frame (we need to store this to allow for overlapping drag and drop targets) */
+    var dragDropAcceptIdPrev = 0
+    /** Last time a target expressed a desire to accept the source */
+    var dragDropAcceptFrameCount = -1
+    /** We don't expose the ImVector<> directly */
+    lateinit var dragDropPayloadBufHeap: ByteBuffer
+
+    var dragDropPayloadBufLocal = ByteArray(8)
 
     //------------------------------------------------------------------
     // Widget state
@@ -182,6 +261,15 @@ object Context {
     var imeInProgress = false
     var imeLastKey = 0
 
+    //------------------------------------------------------------------
+    // Settings
+    //------------------------------------------------------------------
+
+    var settingsLoaded = false
+    /** Save .ini Settings on disk when time reaches zero   */
+    var settingsDirtyTimer = 0f
+    /** .ini Settings for Window  */
+    val settingsWindows = ArrayList<WindowSettings>()
 
     //------------------------------------------------------------------
     // Logging
@@ -216,11 +304,83 @@ object Context {
     var wantTextInputNextFrame = -1
 
 //    char                    TempBuffer[1024*3+1];               // temporary text buffer
+
+    /*  Context creation and access, if you want to use multiple context, share context between modules (e.g. DLL).
+        All contexts share a same FontAtlas by default. If you want different font atlas, you can new() them and
+        overwrite the ::io. Fonts variable of an ImGui context.
+        All those functions are not reliant on the current context. */
+    init {
+        if (gImGui == null) setCurrent()
+
+        // ~initialize(ctx)
+        assert(!g.initialized && !g.settingsLoaded)
+        g.logClipboard = StringBuilder()
+
+        g.initialized = true
+    }
+
+    /** This function is merely here to free heap allocations.     */
+    fun shutdown() {
+
+        /*  The fonts atlas can be used prior to calling NewFrame(), so we clear it even if g.Initialized is FALSE
+            (which would happen if we never called NewFrame)         */
+//        if (IO.fonts) // Testing for NULL to allow user to NULLify in case of running Shutdown() on multiple contexts. Bit hacky.
+        io.fonts.clear()
+
+        // Cleanup of other data are conditional on actually having initialize ImGui.
+        if (!g.initialized) return
+
+        saveIniSettingsToDisk(io.iniFilename)
+
+        // Clear everything else
+        g.windows.forEach { it.clear() }
+        g.windows.clear()
+        g.windowsSortBuffer.clear()
+        g.currentWindow = null
+        g.currentWindowStack.clear()
+        g.windowsById.clear()
+        g.navWindow = null
+        g.hoveredWindow = null
+        g.hoveredRootWindow = null
+        g.activeIdWindow = null
+        g.movingWindow = null
+        g.settingsWindows.clear()
+        g.colorModifiers.clear()
+        g.styleModifiers.clear()
+        g.fontStack.clear()
+        g.openPopupStack.clear()
+        g.currentPopupStack.clear()
+        g.drawDataBuilder.clear()
+        g.overlayDrawList.clearFreeMemory()
+        g.privateClipboard = ""
+        g.inputTextState.text = charArrayOf()
+        g.inputTextState.initialText = charArrayOf()
+        g.inputTextState.tempTextBuffer = charArrayOf()
+
+//        if (g.logFile != null && g.logFile != stdout) { TODO
+//            fclose(g.LogFile)
+//            g.LogFile = NULL
+//        }
+        g.logClipboard.setLength(0)
+
+        g.initialized = false
+    }
+}
+
+fun Context?.setCurrent() {
+    gImGui = this
+}
+
+fun Context?.destroy() {
+    val c = this ?: g
+    c.shutdown()
+    if (gImGui === c)
+        c.setCurrent()
 }
 
 /** This is where your app communicate with ImGui. Access via ImGui::GetIO().
  *  Read 'Programmer guide' section in .cpp file for general usage. */
-object IO {
+class IO(sharedFontAtlas: FontAtlas?) {
 
     //------------------------------------------------------------------
     // Settings (fill once)
@@ -236,14 +396,16 @@ object IO {
     var iniFilename: String? = "imgui.ini"
     /** Path to .log file (default parameter to ImGui::LogToFile when no file is specified).    */
     var logFilename = "imgui_log.txt"
+    /** See NavFlags. Gamepad/keyboard navigation options.    */
+    var navFlags = 0
     /** Time for a double-click, in seconds.    */
     var mouseDoubleClickTime = 0.3f
     /** Distance threshold to stay in to validate a double-click, in pixels.    */
     var mouseDoubleClickMaxDist = 6f
-    /** Distance threshold before considering we are dragging   */
+    /** Distance threshold before considering we are dragging.   */
     var mouseDragThreshold = 6f
-    /** Map of indices into the KeysDown[512] entries array */
-    var keyMap = IntArray(Key.COUNT.i, { -1 })
+    /** Map of indices into the KeysDown[512] entries array which represent your "native" keyboard state.   */
+    var keyMap = IntArray(Key.COUNT) { -1 }
     /** When holding a key/button, time before it starts repeating, in seconds (for buttons in Repeat mode, etc.).  */
     var keyRepeatDelay = 0.25f
     /** When holding a key/button, rate at which it repeats, in seconds.    */
@@ -252,12 +414,12 @@ object IO {
 //    void*         UserData;                 // = NULL               // Store your own data for retrieval by callbacks.
 
     /** Load and assemble one or more fonts into a single tightly packed texture. Output to Fonts array.    */
-    val fonts = FontAtlas()
+    val fonts = sharedFontAtlas ?: FontAtlas()
     /** Global scale all fonts  */
     var fontGlobalScale = 1f
     /** Allow user scaling text of individual window with CTRL+Wheel.   */
     var fontAllowUserScaling = false
-    /** Font to use on NewFrame(). Use NULL to uses Fonts->Fonts[0].    */
+    /** Font to use on NewFrame(). Use NULL to useMouseDragThreshold s Fonts->Fonts[0].    */
     var fontDefault: Font? = null
     /** For retina display or other situations where window coordinates are different from framebuffer coordinates.
      *  User storage only, presently not used by ImGui. */
@@ -282,11 +444,6 @@ object IO {
     //------------------------------------------------------------------
     // User Functions
     //------------------------------------------------------------------
-
-    /** Rendering function, will be called in Render().
-     *  Alternatively you can keep this to NULL and call GetDrawData() after Render() to get the same pointer.
-     *  See example applications if you are unsure of how to implement this.    */
-    var renderDrawListsFn: ((DrawData) -> Unit)? = null
 
     // Optional: access OS clipboard
     // (default to use native Win32 clipboard on Windows, otherwise uses a private clipboard. Override to access OS clipboard on other architectures)
@@ -317,6 +474,8 @@ object IO {
     val mouseDown = BooleanArray(5)
     /** Mouse wheel: 1 unit scrolls about 5 lines text. */
     var mouseWheel = 0f
+    /** Mouse wheel (Horizontal). Most users don't have a mouse with an horizontal wheel, may not be filled by all back-ends.   */
+    var mouseWheelH = 0f
     /** Request ImGui to draw a mouse cursor for you (if you are on a platform without a mouse cursor). */
     var mouseDrawCursor = false
     /** Keyboard modifier pressed: Control  */
@@ -327,11 +486,14 @@ object IO {
     var keyAlt = false
     /** Keyboard modifier pressed: Cmd/Super/Windows    */
     var keySuper = false
-    /** Keyboard keys that are pressed (in whatever storage order you naturally have access to keyboard data)   */
+    /** Keyboard keys that are pressed (ideally left in the "native" order your engine has access to keyboard keys,
+     *  so you can use your own defines/enums for keys).   */
     val keysDown = BooleanArray(512)
     /** List of characters input (translated by user from keypress + keyboard state). Fill using addInputCharacter()
      *  helper. */
     val inputCharacters = CharArray(16)
+    /** Gamepad inputs (keyboard keys will be auto-mapped and be written here by ::newFrame)   */
+    val navInputs = FloatArray(NavInput.COUNT)
 
     // Functions
 
@@ -361,9 +523,14 @@ object IO {
     /** Mobile/console: when IO.wantTextInput is true, you may display an on-screen keyboard. This is set by ImGui when
      *  it wants textual keyboard input to happen (e.g. when a InputText widget is active). */
     var wantTextInput = false
-    /** [BETA-NAV] MousePos has been altered, back-end should reposition mouse on next frame. Set only when
-     * 'navMovesMouse = true'.    */
+    /** MousePos has been altered, back-end should reposition mouse on next frame. Set only when NavFlags.MoveMouse flag
+     * is enabled in IO.navFlags.    */
     var wantMoveMouse = false
+    /** Directional navigation is currently allowed (will handle KeyNavXXX events) = a window is focused and it doesn't
+     *  use the WindowFlags.NoNavInputs flag.   */
+    var navActive = false
+    /** Directional navigation is visible and allowed (will handle KeyNavXXX events). */
+    var navVisible = false
     /** Application framerate estimation, in frame per second. Solely for convenience. Rolling average estimation based
     on IO.DeltaTime over 120 frames */
     var framerate = 0f
@@ -387,7 +554,7 @@ object IO {
     /** Previous mouse position temporary storage (nb: not for public use, set to MousePos in NewFrame())   */
     var mousePosPrev = Vec2(-Float.MAX_VALUE)
     /** Position at time of clicking    */
-    val mouseClickedPos = Array(5, { Vec2() })
+    val mouseClickedPos = Array(5) { Vec2() }
     /** Time of last click (used to figure out double-click)    */
     val mouseClickedTime = FloatArray(5)
     /** Mouse button went from !Down to Down    */
@@ -400,17 +567,21 @@ object IO {
     started outside ImGui bounds.   */
     var mouseDownOwned = BooleanArray(5)
     /** Duration the mouse button has been down (0.0f == just clicked)  */
-    val mouseDownDuration = FloatArray(5, { -1f })
+    val mouseDownDuration = FloatArray(5) { -1f }
     /** Previous time the mouse button has been down    */
-    val mouseDownDurationPrev = FloatArray(5, { -1f })
+    val mouseDownDurationPrev = FloatArray(5) { -1f }
     /** Maximum distance, absolute, on each axis, of how much mouse has traveled from the clicking point    */
-    val mouseDragMaxDistanceAbs = Array(5, { Vec2() })
+    val mouseDragMaxDistanceAbs = Array(5) { Vec2() }
     /** Squared maximum distance of how much mouse has traveled from the clicking point */
     val mouseDragMaxDistanceSqr = FloatArray(5)
     /** Duration the keyboard key has been down (0.0f == just pressed)  */
-    val keysDownDuration = FloatArray(512, { -1f })
+    val keysDownDuration = FloatArray(512) { -1f }
     /** Previous duration the key has been down */
-    val keysDownDurationPrev = FloatArray(512, { -1f })
+    val keysDownDurationPrev = FloatArray(512) { -1f }
+
+    val navInputsDownDuration = FloatArray(NavInput.COUNT) { -1f }
+
+    val navInputsDownDurationPrev = FloatArray(NavInput.COUNT)
 
 //    var imeSetInputScreenPosFn_DefaultImpl = { x: Int, y: Int -> TODO
 //        // Notify OS Input Method Editor of text input position
@@ -427,54 +598,67 @@ object IO {
 //    }
 }
 
+// for IO.keyMap
+
 operator fun IntArray.set(index: Key, value: Int) {
     this[index.i] = value
 }
 
+operator fun IntArray.get(index: Key) = get(index.i)
 
+// for IO.navInputs
+
+operator fun FloatArray.set(index: NavInput, value: Float) {
+    this[index.i] = value
+}
+
+operator fun FloatArray.get(index: NavInput) = get(index.i)
+
+/** You may modify the ImGui::GetStyle() main instance during initialization and before NewFrame().
+ *  During the frame, prefer using ImGui::PushStyleVar(ImGuiStyleVar_XXXX)/PopStyleVar() to alter the main style values,
+ *  and ImGui::PushStyleColor(ImGuiCol_XXX)/PopStyleColor() for colors. */
 class Style {
 
-    /**  Global alpha applies to everything in ImGui    */
+    /**  Global alpha applies to everything in ImGui.    */
     var alpha = 1f
-    /** Padding within a window */
+    /** Padding within a window. */
     var windowPadding = Vec2(8)
-    /** Radius of window corners rounding. Set to 0.0f to have rectangular windows  */
-    var windowRounding = 9f
-    /** Thickness of border around windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly)   */
-    var windowBorderSize = 0f
-    /** Minimum window size */
+    /** Radius of window corners rounding. Set to 0.0f to have rectangular windows.  */
+    var windowRounding = 7f
+    /** Thickness of border around windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly).  */
+    var windowBorderSize = 1f
+    /** Minimum window size. This is a global setting. If you want to constraint individual windows, use SetNextWindowSizeConstraints(). */
     var windowMinSize = Vec2i(32)
     /** Alignment for title bar text    */
     var windowTitleAlign = Vec2(0f, 0.5f)
     /** Radius of child window corners rounding. Set to 0.0f to have rectangular child windows.  */
     var childRounding = 0f
-    /** Thickness of border around child windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly) */
+    /** Thickness of border around child windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly). */
     var childBorderSize = 1f
     /** Radius of popup window corners rounding.    */
     var popupRounding = 0f
-    /** Thickness of border around popup windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly) */
+    /** Thickness of border around popup windows. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly). */
     var popupBorderSize = 1f
-    /** Padding within a framed rectangle (used by most widgets)    */
+    /** Padding within a framed rectangle (used by most widgets).    */
     var framePadding = Vec2(4, 3)
     /** Radius of frame corners rounding. Set to 0.0f to have rectangular frames (used by most widgets).    */
     var frameRounding = 0f
-    /** Thickness of border around frames. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly)    */
+    /** Thickness of border around frames. Generally set to 0f or 1f. (Other values are not well tested and more CPU/GPU costly).    */
     var frameBorderSize = 0f
-    /** Horizontal and vertical spacing between widgets/lines   */
+    /** Horizontal and vertical spacing between widgets/lines.   */
     var itemSpacing = Vec2(8, 4)
-    /** Horizontal and vertical spacing between within elements of a composed widget (e.g. a slider and its label)  */
+    /** Horizontal and vertical spacing between within elements of a composed widget (e.g. a slider and its label).  */
     var itemInnerSpacing = Vec2(4)
     /** Expand reactive bounding box for touch-based system where touch position is not accurate enough. Unfortunately
-     *  we don't sort widgets so priority on overlap will always be given to the first widget. So don't grow this too
-     *  much!   */
+     *  we don't sort widgets so priority on overlap will always be given to the first widget. So don't grow this too much!   */
     var touchExtraPadding = Vec2()
     /** Horizontal spacing when e.g. entering a tree node. Generally == (FontSize + FramePadding.x*2).  */
     var indentSpacing = 21f
-    /** Minimum horizontal spacing between two columns  */
+    /** Minimum horizontal spacing between two columns.  */
     var columnsMinSpacing = 6f
-    /** Width of the vertical scrollbar, Height of the horizontal scrollbar */
+    /** Width of the vertical scrollbar, Height of the horizontal scrollbar. */
     var scrollbarSize = 16f
-    /** Radius of grab corners rounding for scrollbar   */
+    /** Radius of grab corners rounding for scrollbar.   */
     var scrollbarRounding = 9f
     /** Minimum width/height of a grab box for slider/scrollbar */
     var grabMinSize = 10f
@@ -488,18 +672,21 @@ class Style {
     /** If you cannot see the edge of your screen (e.g. on a TV) increase the safe area padding. Covers popups/tooltips
      *  as well regular windows.    */
     var displaySafeAreaPadding = Vec2(4)
+    /** Scale software rendered mouse cursor (when io.MouseDrawCursor is enabled). May be removed later.    */
+    var mouseCursorScale = 1f
     /** Enable anti-aliasing on lines/borders. Disable if you are really short on CPU/GPU.  */
     var antiAliasedLines = true
     /**  Enable anti-aliasing on filled shapes (rounded rectangles, circles, etc.)  */
-    var antiAliasedShapes = true
-    /** Tessellation tolerance. Decrease for highly tessellated curves (higher quality, more polygons), increase to
-     *  reduce quality. */
+    var antiAliasedFill = true
+    /** Tessellation tolerance when using pathBezierCurveTo() without a specific number of segments.
+     *  Decrease for highly tessellated curves (higher quality, more polygons), increase to reduce quality. */
     var curveTessellationTol = 1.25f
 
     val colors = ArrayList<Vec4>()
 
     /** JVM IMGUI   */
     val locale = Locale.US
+//    val locale = Locale.getDefault()
 
     init {
         ImGui.styleColorsClassic(this)
@@ -534,7 +721,7 @@ class Style {
         displayWindowPadding put style.displayWindowPadding
         displaySafeAreaPadding put style.displaySafeAreaPadding
         antiAliasedLines = style.antiAliasedLines
-        antiAliasedShapes = style.antiAliasedShapes
+        antiAliasedFill = style.antiAliasedFill
         curveTessellationTol = style.curveTessellationTol
         style.colors.forEach { colors.add(Vec4(it)) }
 //        locale = style.locale
@@ -563,6 +750,7 @@ class Style {
         grabRounding = glm.floor(grabRounding * scaleFactor)
         displayWindowPadding = glm.floor(displayWindowPadding * scaleFactor)
         displaySafeAreaPadding = glm.floor(displaySafeAreaPadding * scaleFactor)
+        mouseCursorScale = glm.floor(mouseCursorScale * scaleFactor)
     }
 }
 
