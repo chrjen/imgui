@@ -29,7 +29,7 @@ import imgui.ImGui.pushClipRect
 import imgui.ImGui.renderFrame
 import imgui.ImGui.renderNavHighlight
 import imgui.ImGui.renderTextClipped
-import imgui.ImGui.renderTriangle
+import imgui.ImGui.renderArrow
 import imgui.ImGui.scrollbar
 import imgui.ImGui.setActiveId
 import imgui.ImGui.setNextWindowSize
@@ -37,6 +37,7 @@ import imgui.ImGui.style
 import imgui.imgui.imgui_main.Companion.resizeGripDef
 import imgui.imgui.imgui_main.Companion.updateManualResize
 import imgui.internal.*
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.reflect.KMutableProperty0
 import imgui.ItemFlags as If
@@ -360,7 +361,7 @@ interface imgui_window {
                 val sc = style.mouseCursorScale
                 val refPos = if (!g.navDisableHighlight && g.navDisableMouseHover) navCalcPreferredMousePos() else Vec2(io.mousePos)
                 val rectToAvoid =
-                        if (!g.navDisableHighlight && g.navDisableMouseHover && io.navFlags hasnt NavFlags.MoveMouse)
+                        if (!g.navDisableHighlight && g.navDisableMouseHover && io.configFlags hasnt ConfigFlags.NavMoveMouse)
                             Rect(refPos.x - 16, refPos.y - 8, refPos.x + 16, refPos.y + 8)
                         else
                             Rect(refPos.x - 16, refPos.y - 8, refPos.x + 24 * sc, refPos.y + 24 * sc) // FIXME: Hard-coded based on mouse cursor shape expectation. Exact dimension not very important.
@@ -569,7 +570,7 @@ interface imgui_window {
                 dc.textWrapPosStack.clear()
                 dc.columnsSet = null
                 dc.treeDepth = 0
-                dc.treeDepthMayCloseOnPop = 0
+                dc.treeDepthMayJumpToParentOnPop = 0
                 dc.stateStorage = stateStorage
                 dc.groupStack.clear()
                 menuColumns.update(3, style.itemSpacing.x, windowJustActivatedByUser)
@@ -605,7 +606,7 @@ interface imgui_window {
                     if (buttonBehavior(bb, id).first())
                         window.collapseToggleWanted = true // Defer collapsing to next frame as we are too far in the Begin() function
                     renderNavHighlight(bb, id)
-                    renderTriangle(Vec2(window.pos + style.framePadding), if (window.collapsed) Dir.Right else Dir.Down, 1f)
+                    renderArrow(Vec2(window.pos + style.framePadding), if (window.collapsed) Dir.Right else Dir.Down, 1f)
                 }
                 // Close button
                 if (pOpen != null) {
@@ -659,6 +660,13 @@ interface imgui_window {
             window.innerRect.max.y = window.pos.y + window.size.y - window.scrollbarSizes.y - window.windowBorderSize
             //window->DrawList->AddRect(window->InnerRect.Min, window->InnerRect.Max, IM_COL32_WHITE);
 
+            // Inner clipping rectangle
+            // Force round operator last to ensure that e.g. (int)(max.x-min.x) in user's render code produce correct result.
+            window.innerClipRect.min.x = floor(0.5f + window.innerRect.min.x + max(0f, floor(window.windowPadding.x*0.5f - window.windowBorderSize)))
+            window.innerClipRect.min.y = floor(0.5f + window.innerRect.min.y)
+            window.innerClipRect.max.x = floor(0.5f + window.innerRect.max.x - max(0f, floor(window.windowPadding.x*0.5f - window.windowBorderSize)))
+            window.innerClipRect.max.y = floor(0.5f + window.innerRect.max.y)
+
             /* After begin() we fill the last item / hovered data using the title bar data. Make that a standard behavior
                 (to allow usage of context menus on title bar only, etc.).             */
             window.dc.lastItemId = window.moveId
@@ -666,15 +674,7 @@ interface imgui_window {
             window.dc.lastItemRect = titleBarRect
         }
 
-        /*  Inner clipping rectangle
-            Force round operator last to ensure that e.g. (int)(max.x-min.x) in user's render code produce correct result.         */
-        val borderSize = window.windowBorderSize
-        val clipRect = Rect()
-        clipRect.min.x = glm.floor(0.5f + window.innerRect.min.x + (0f max glm.floor(window.windowPadding.x * 0.5f - borderSize)))
-        clipRect.min.y = glm.floor(0.5f + window.innerRect.min.y)
-        clipRect.max.x = glm.floor(0.5f + window.innerRect.max.x - (0f max glm.floor(window.windowPadding.x * 0.5f - borderSize)))
-        clipRect.max.y = glm.floor(0.5f + window.innerRect.max.y)
-        pushClipRect(clipRect.min, clipRect.max, true)
+        pushClipRect(window.innerClipRect.min, window.innerClipRect.max, true)
 
         // Clear 'accessed' flag last thing
         if (firstBeginOfTheFrame) window.writeAccessed = false

@@ -165,8 +165,8 @@ enum class TreeNodeFlags(val i: Int) {
     FramePadding(1 shl 10),
     //ImGuITreeNodeFlags_SpanAllAvailWidth  = 1 << 11,  // FIXME: TODO: Extend hit box horizontally even if not framed
     //ImGuiTreeNodeFlags_NoScrollOnOpen     = 1 << 12,  // FIXME: TODO: Disable automatic scroll on TreePop() if node got just open and contents is not visible
-    /** (WIP) Nav: left direction may close this TreeNode() when focusing on any child (items submitted between TreeNode and TreePop)   */
-    NavCloseFromChild    (1 shl 13),
+    /** (WIP) Nav: left direction may move to this TreeNode() from any of its child (items submitted between TreeNode and TreePop)   */
+    NavLeftJumpsBackHere(1 shl 13),
     CollapsingHeader(Framed or NoAutoOpenOnLog);
 
     infix fun or(treeNodeFlag: TreeNodeFlags) = i or treeNodeFlag.i
@@ -213,6 +213,10 @@ enum class ComboFlags(val i: Int) {
     HeightLarge(1 shl 3),
     /** As many fitting items as possible */
     HeightLargest(1 shl 4),
+    /** Display on the preview box without the square arrow button  */
+    NoArrowButton(1 shl 5),
+    /** Display only a square arrow button  */
+    NoPreview(1 shl 6),
     HeightMask_(HeightSmall or HeightRegular or HeightLarge or HeightLargest)
 }
 
@@ -306,6 +310,18 @@ val PAYLOAD_TYPE_COLOR_3F = "_COL3F"
 /** float[4], Standard type for colors. User code may use this type. */
 val PAYLOAD_TYPE_COLOR_4F = "_COL4F"
 
+/** A direction */
+enum class Dir { None, Left, Right, Up, Down, Count;
+
+    val i = ordinal - 1
+
+    companion object {
+        fun of(i: Int) = values()[i]
+    }
+}
+
+infix fun Int.shl(b: Dir) = shl(b.i)
+
 /** User fill ImGuiio.KeyMap[] array with indices into the ImGuiio.KeysDown[512] array  */
 enum class Key { Tab, LeftArrow, RightArrow, UpArrow, DownArrow, PageUp, PageDown, Home, End, Insert, Delete, Backspace,
     Space, Enter, Escape, A, C, V, X, Y, Z;
@@ -326,9 +342,9 @@ enum class Key { Tab, LeftArrow, RightArrow, UpArrow, DownArrow, PageUp, PageDow
 }
 
 /** [BETA] Gamepad/Keyboard directional navigation
- *  Keyboard: Set io.navFlags |= NavFlags.EnableKeyboard to enable. ::newFrame() will automatically fill io.navInputs[]
+ *  Keyboard: Set io.configFlags |= NavFlags.EnableKeyboard to enable. ::newFrame() will automatically fill io.navInputs[]
  *  based on your io.keyDown[] + io.keyMap[] arrays.
- *  Gamepad:  Set io.navFlags |= NavFlags.EnableGamepad to enable. Fill the io.navInputs[] fields before calling
+ *  Gamepad:  Set io.configFlags |= NavFlags.EnableGamepad to enable. Fill the io.navInputs[] fields before calling
  *  ::newFrame(). Note that io.navInputs[] is cleared by ::endFrame().
  *  Read instructions in imgui.cpp for more details.    */
 enum class NavInput {
@@ -396,26 +412,32 @@ enum class NavInput {
     fun isPressed(mode: InputReadMode) = getNavInputAmount(this, mode) > 0f
 }
 
-/** [BETA] Gamepad/Keyboard directional navigation flags, stored in io.NavFlags  */
-enum class NavFlags {
+/** Configuration flags stored in io.configFlags  */
+enum class ConfigFlags(val i: Int) {
     /** Master keyboard navigation enable flag. ::newFrame() will automatically fill io.navInputs[] based on io.keyDown[].    */
-    EnableKeyboard,
+    NavEnableKeyboard(1 shl 0),
     /** Master gamepad navigation enable flag. This is mostly to instruct your imgui back-end to fill io.navInputs[].   */
-    EnableGamepad,
+    NavEnableGamepad(1 shl 1),
     /** Request navigation to allow moving the mouse cursor. May be useful on TV/console systems where moving a virtual
      *  mouse is awkward. Will update io.mousePos and set io.WantMoveMouse = true. If enabled you MUST honor io.wantMoveMouse
      *  requests in your binding, otherwise ImGui will react as if the mouse is jumping around back and forth.  */
-    MoveMouse,
+    NavMoveMouse(1 shl 2),
     /** Do not set the io.WantCaptureKeyboard flag with io.NavActive is set.    */
-    NoCaptureKeyboard;
+    NavNoCaptureKeyboard(1 shl 3),
 
-    val i = 1 shl ordinal
+    /*  User storage (to allow your back-end/engine to communicate to code that may be shared between multiple projects.
+        Those flags are not used by core ImGui)     */
+
+    /** Back-end is SRGB-aware. */
+    IsSRGB(1 shl 20),
+    /** Back-end is using a touch screen instead of a mouse.   */
+    IsTouchScreen(1 shl 21);
 }
 
-infix fun Int.has(b: NavFlags) = and(b.i) != 0
-infix fun Int.hasnt(b: NavFlags) = and(b.i) == 0
-infix fun Int.or(b: NavFlags) = or(b.i)
-infix fun NavFlags.or(b: NavFlags) = i or b.i
+infix fun Int.has(b: ConfigFlags) = and(b.i) != 0
+infix fun Int.hasnt(b: ConfigFlags) = and(b.i) == 0
+infix fun Int.or(b: ConfigFlags) = or(b.i)
+infix fun ConfigFlags.or(b: ConfigFlags) = i or b.i
 
 /** Enumeration for PushStyleColor() / PopStyleColor()  */
 enum class Col {
@@ -602,27 +624,28 @@ infix fun Int.wo(b: ColorEditFlags) = this and b.i.inv()
 infix fun Int.wo(b: Int) = this and b.inv()
 
 /** Enumeration for GetMouseCursor()    */
-enum class MouseCursor(val i: Int) {
+enum class MouseCursor {
 
-    None(-1),
-    Arrow(0),
+    None,
+    Arrow,
     /** When hovering over InputText, etc.  */
-    TextInput(1),
+    TextInput,
     /** Unused  */
-    ResizeAll(2),
+    ResizeAll,
     /** When hovering over an horizontal border  */
-    ResizeNS(3),
+    ResizeNS,
     /** When hovering over a vertical border or a column */
-    ResizeEW(4),
+    ResizeEW,
     /** When hovering over the bottom-left corner of a window  */
-    ResizeNESW(5),
+    ResizeNESW,
     /** When hovering over the bottom-right corner of a window  */
-    ResizeNWSE(6),
+    ResizeNWSE;
 
-    Count(7);
+    val i = ordinal - 1
 
     companion object {
         fun of(i: Int) = values().first { it.i == i }
+        val COUNT = ResizeNWSE.i + 1
     }
 }
 

@@ -4,16 +4,17 @@ import gli_.has
 import glm_.glm
 import glm_.vec2.Vec2
 import imgui.Cond
-import imgui.ImGui.style
+import imgui.Dir
 import imgui.ImGui.closeButton
 import imgui.ImGui.currentWindow
 import imgui.ImGui.indent
+import imgui.ImGui.navMoveRequestCancel
 import imgui.ImGui.popId
 import imgui.ImGui.pushId
+import imgui.ImGui.style
 import imgui.ImGui.treeNodeBehavior
 import imgui.ImGui.unindent
 import imgui.g
-import imgui.internal.Dir
 import imgui.or
 import kotlin.reflect.KMutableProperty0
 import imgui.TreeNodeFlags as Tnf
@@ -79,11 +80,11 @@ interface imgui_widgetsTrees {
 
         currentWindow.dc.treeDepth--
         if (g.navMoveDir == Dir.Left && g.navWindow === window && navMoveRequestButNoResultYet())
-            if (g.navIdIsAlive && window.dc.treeDepthMayCloseOnPop has (1 shl window.dc.treeDepth)) {
+            if (g.navIdIsAlive && window.dc.treeDepthMayJumpToParentOnPop has (1 shl window.dc.treeDepth)) {
                 setNavId(window.idStack.last(), g.navLayer)
                 navMoveRequestCancel()
             }
-        window.dc.treeDepthMayCloseOnPop = window.dc.treeDepthMayCloseOnPop and (1 shl window.dc.treeDepth) - 1
+        window.dc.treeDepthMayJumpToParentOnPop = window.dc.treeDepthMayJumpToParentOnPop and (1 shl window.dc.treeDepth) - 1
 
         popId()
     }

@@ -477,6 +477,11 @@ interface imgui_internal {
             g.navId = window.navLastIds[0]
     }
 
+    fun navMoveRequestCancel() {
+        g.navMoveRequest = false
+        navUpdateAnyRequestFlag()
+    }
+
     /** Remotely activate a button, checkbox, tree node etc. given its unique ID. activation is queued and processed
      *  on the next frame when the item is encountered again.  */
     fun activateItem(id: Int) {
@@ -766,11 +771,10 @@ interface imgui_internal {
             dc.columnsSet = columns
 
             // Set state for first column
-            val contentRegionWidth = if (sizeContentsExplicit.x != 0f) sizeContentsExplicit.x else size.x - scrollbarSizes.x
+            val contentRegionWidth = if (sizeContentsExplicit.x != 0f) sizeContentsExplicit.x else innerClipRect.max.x - pos.x
             with(columns) {
                 minX = dc.indentX - style.itemSpacing.x // Lock our horizontal range
-                //maxX = contentRegionWidth - window->Scroll.x - ((window->Flags & ImGuiWindowFlags_NoScrollbar) ? 0 : g.Style.ScrollbarSize);// - window->WindowPadding().x;
-                maxX = contentRegionWidth - scroll.x
+                maxX = max(contentRegionWidth - scroll.x, minX + 1f)
                 startPosY = dc.cursorPos.y
                 startMaxPosX = dc.cursorMaxPos.x
                 cellMaxY = dc.cursorPos.y
@@ -789,17 +793,10 @@ interface imgui_internal {
                 for (n in 0..columnsCount)
                     columns.columns += ColumnData().apply { offsetNorm = n / columnsCount.f }
 
-            for (n in 0..columnsCount) {
-                // Clamp position
-                val column = columns.columns[n]
-                var t = column.offsetNorm
-                if (columns.flags hasnt Cf.NoForceWithinWindow)
-                    t = min(t, pixelsToOffsetNorm(columns, (columns.maxX - columns.minX) - style.columnsMinSpacing * (columns.count - n)))
-                column.offsetNorm = t
-
-                if (n == columnsCount) continue
+            for (n in 0 until columnsCount) {
 
                 // Compute clipping rectangle
+                val column = columns.columns[n]
                 val clipX1 = floor(0.5f + pos.x + getColumnOffset(n) - 1f)
                 val clipX2 = floor(0.5f + pos.x + getColumnOffset(n + 1) - 1f)
                 column.clipRect = Rect(clipX1, -Float.MAX_VALUE, clipX2, +Float.MAX_VALUE)
@@ -1028,7 +1025,7 @@ interface imgui_internal {
     }
 
     /** Render a triangle to denote expanded/collapsed state    */
-    fun renderTriangle(pMin: Vec2, dir: Dir, scale: Float = 1.0f) {
+    fun renderArrow(pMin: Vec2, dir: Dir, scale: Float = 1.0f) {
 
         val window = g.currentWindow!!
 
@@ -1377,7 +1374,7 @@ interface imgui_internal {
         val col = (if (hovered && held) Col.ButtonActive else if (hovered) Col.ButtonHovered else Col.Button).u32
         renderNavHighlight(bb, id)
         renderFrame(bb.min, bb.max, col, true, style.frameRounding)
-        renderTriangle(bb.min + padding, dir, 1f)
+        renderArrow(bb.min + padding, dir, 1f)
         return pressed
     }
 
@@ -1400,7 +1397,7 @@ interface imgui_internal {
         val window = currentWindow
 
         // Draw frame
-        val frameCol = if (g.activeId == id && g.activeIdSource == InputSource.Nav) Col.FrameBgActive else Col.FrameBg
+        val frameCol = if(g.activeId == id) Col.FrameBgActive else if(g.hoveredId == id) Col.FrameBgHovered else Col.FrameBg
         renderNavHighlight(frameBb, id)
         renderFrame(frameBb.min, frameBb.max, frameCol.u32, true, style.frameRounding)
 
@@ -2567,8 +2564,8 @@ interface imgui_internal {
         /*  Store a flag for the current depth to tell if we will allow closing this node when navigating one of its child.
             For this purpose we essentially compare if g.NavIdIsAlive went from 0 to 1 between TreeNode() and TreePop().
             This is currently only support 32 level deep and we are fine with (1 << Depth) overflowing into a zero. */
-        if (isOpen && !g.navIdIsAlive && flags has Tnf.NavCloseFromChild && flags hasnt Tnf.NoTreePushOnOpen)
-            window.dc.treeDepthMayCloseOnPop = window.dc.treeDepthMayCloseOnPop or (1 shl window.dc.treeDepth)
+        if (isOpen && !g.navIdIsAlive && flags has Tnf.NavLeftJumpsBackHere && flags hasnt Tnf.NoTreePushOnOpen)
+            window.dc.treeDepthMayJumpToParentOnPop = window.dc.treeDepthMayJumpToParentOnPop or (1 shl window.dc.treeDepth)
 
         val itemAdd = itemAdd(interactBb, id)
         window.dc.lastItemStatusFlags = window.dc.lastItemStatusFlags or ItemStatusFlags.HasDisplayRect
@@ -2631,7 +2628,7 @@ interface imgui_internal {
             // Framed type
             renderFrame(frameBb.min, frameBb.max, col.u32, true, style.frameRounding)
             renderNavHighlight(frameBb, id, NavHighlightFlags.TypeThin.i)
-            renderTriangle(frameBb.min + Vec2(padding.x, textBaseOffsetY), if (isOpen) Dir.Down else Dir.Right, 1f)
+            renderArrow(frameBb.min + Vec2(padding.x, textBaseOffsetY), if (isOpen) Dir.Down else Dir.Right, 1f)
             if (g.logEnabled) {
                 /*  NB: '##' is normally used to hide text (as a library-wide feature), so we need to specify the text
                     range to make sure the ## aren't stripped out here.                 */
@@ -2649,7 +2646,7 @@ interface imgui_internal {
             if (flags has Tnf.Bullet)
                 TODO()//renderBullet(bb.Min + ImVec2(textOffsetX * 0.5f, g.FontSize * 0.50f + textBaseOffsetY))
             else if (flags hasnt Tnf.Leaf)
-                renderTriangle(frameBb.min + Vec2(padding.x, g.fontSize * 0.15f + textBaseOffsetY),
+                renderArrow(frameBb.min + Vec2(padding.x, g.fontSize * 0.15f + textBaseOffsetY),
                         if (isOpen) Dir.Down else Dir.Right, 0.7f)
             if (g.logEnabled)
                 logRenderedText(textPos, ">")
